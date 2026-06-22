@@ -57,6 +57,9 @@ function migriere(db) {
   ergaenze('dokumente', 'mieter_id', 'INTEGER');
   ergaenze('dokumente', 'einheit_id', 'INTEGER');
   ergaenze('dokumente', 'datum', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('mietvertraege', 'nk_vorauszahlung', 'INTEGER NOT NULL DEFAULT 0');
+  ergaenze('buchungen', 'umlagefaehig', 'INTEGER');
+  ergaenze('buchungen', 'nk_art', "TEXT NOT NULL DEFAULT ''");
 }
 
 function seed(db) {

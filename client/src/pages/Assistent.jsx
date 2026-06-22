@@ -14,7 +14,7 @@ export default function Assistent({ gehe, startModus, oeffneSetup }) {
         <h1 className="text-2xl font-bold text-slate-800">Assistent</h1>
         <p className="text-slate-500 mt-1">Geführte Einrichtung und Abarbeitung der offenen Buchungen</p>
       </header>
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-3 gap-6">
         <HubKarte
           titel="Ersteinrichtung"
           text="Richte GbR-Daten, dein Objekt, die Mieteinheiten mit Flächen und USt-Status sowie Mieter Schritt für Schritt ein."
@@ -28,6 +28,13 @@ export default function Assistent({ gehe, startModus, oeffneSetup }) {
           knopf="Stapel starten"
           onClick={() => setModus('stapel')}
           icon="M4 6h16M4 12h16M4 18h10"
+        />
+        <HubKarte
+          titel="Nebenkostenabrechnung"
+          text="Betriebskosten eines Jahres je Mieter abrechnen — KI stuft umlagefähige Kosten ein, Ergebnis als druckfertige Abrechnung."
+          knopf="Abrechnung starten"
+          onClick={() => gehe('nebenkosten')}
+          icon="M3 13h2l2 5 3-12 3 9 2-5h6"
         />
       </div>
     </div>

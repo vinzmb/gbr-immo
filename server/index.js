@@ -10,8 +10,9 @@ import {
 } from './lib/steuer.js';
 import { datevBuchungsstapel } from './lib/datev.js';
 import { parseBank } from './lib/bankimport.js';
-import { belegKlassifizieren, belegAusDateiLesen } from './lib/ki.js';
+import { belegKlassifizieren, belegAusDateiLesen, nkKlassifizieren } from './lib/ki.js';
 import { findeTreffer } from './lib/matching.js';
+import { nkBerechnen, monateImZeitraum } from './lib/nebenkosten.js';
 
 const db = getDb();
 const app = Fastify({ logger: false, bodyLimit: 25 * 1024 * 1024 });
@@ -64,7 +65,7 @@ function crud(tabelle, felder) {
 crud('objekte', ['name', 'strasse', 'plz', 'ort', 'gesamtflaeche', 'notiz']);
 crud('einheiten', ['objekt_id', 'bezeichnung', 'flaeche', 'nutzungsart', 'ust_status', 'miteigentumsanteil', 'notiz']);
 crud('mieter', ['name', 'ansprechpartner', 'email', 'telefon', 'notiz']);
-crud('mietvertraege', ['einheit_id', 'mieter_id', 'nettomiete', 'ust_satz', 'beginn', 'ende', 'kaution', 'aktiv']);
+crud('mietvertraege', ['einheit_id', 'mieter_id', 'nettomiete', 'ust_satz', 'beginn', 'ende', 'kaution', 'nk_vorauszahlung', 'aktiv']);
 crud('bank_konten', ['name', 'iban']);
 // Dokumente: Liste/Löschen via crud-Stil, Anlegen mit optionalem Datei-Upload.
 app.get('/api/dokumente', () => all('SELECT * FROM dokumente ORDER BY id DESC'));
@@ -392,6 +393,85 @@ app.post('/api/ki/beleg-datei', async (req) => {
   }
 });
 
+// ---------- Nebenkosten ----------
+// Umlage-Einstufung einer Buchung persistieren
+app.put('/api/buchungen/:id/umlage', (req) => {
+  run('UPDATE buchungen SET umlagefaehig = ?, nk_art = ? WHERE id = ?',
+    req.body.umlagefaehig == null ? null : (req.body.umlagefaehig ? 1 : 0),
+    req.body.nk_art || '', Number(req.params.id));
+  return one('SELECT * FROM buchungen WHERE id = ?', Number(req.params.id));
+});
+
+// Ausgaben-Buchungen eines Zeitraums (Kandidaten für Umlage)
+app.get('/api/nk/kosten', (req) => {
+  const { von, bis } = req.query;
+  return all(
+    "SELECT * FROM buchungen WHERE typ = 'ausgabe' AND storniert = 0 AND datum >= ? AND datum <= ? ORDER BY datum",
+    von, bis
+  );
+});
+
+// KI: Kostenpositionen als umlagefähig einstufen
+app.post('/api/nk/klassifizieren', async (req) => {
+  const m = mandant();
+  if (!m.ki_aktiv || !m.ki_api_key) return { error: 'KI ist nicht aktiviert.' };
+  const kontoName = (nr) => one('SELECT bezeichnung FROM konten WHERE nummer = ? AND rahmen = ?', nr, m.kontenrahmen)?.bezeichnung || '';
+  try {
+    const buchungen = (req.body.buchungen || []).map((b) => ({
+      id: b.id,
+      text: `${b.buchungstext || ''} | Konto ${b.konto} ${kontoName(b.konto)} | ${(b.betrag_brutto / 100).toFixed(2)} EUR`,
+    }));
+    return await nkKlassifizieren({ apiKey: m.ki_api_key, buchungen });
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
+
+// Abrechnung berechnen (ohne Speichern)
+function nkAbrechnung(objektId, von, bis, vorauszahlungOverride) {
+  const einheiten = all('SELECT * FROM einheiten WHERE objekt_id = ? ORDER BY id', objektId);
+  const umlage = all(
+    "SELECT * FROM buchungen WHERE typ = 'ausgabe' AND storniert = 0 AND umlagefaehig = 1 AND datum >= ? AND datum <= ?",
+    von, bis
+  );
+  const gesamtkosten = umlage.reduce((a, b) => a + b.betrag_brutto, 0);
+  const vertraege = all('SELECT * FROM mietvertraege WHERE aktiv = 1');
+  const mieterName = new Map(all('SELECT id, name FROM mieter').map((m) => [m.id, m.name]));
+  const monate = monateImZeitraum(von, bis);
+  const res = nkBerechnen({ einheiten, gesamtkosten, vertraege, mieterName, monate, vorauszahlungOverride: vorauszahlungOverride || {} });
+  return { objekt_id: objektId, von, bis, monate, positionen: umlage.length, ...res };
+}
+
+app.get('/api/nk/abrechnung', (req) =>
+  nkAbrechnung(Number(req.query.objekt_id), req.query.von, req.query.bis));
+
+// Abrechnung speichern
+app.post('/api/nk/abrechnung', (req) => {
+  const { objekt_id, von, bis, daten, gesamtkosten } = req.body;
+  const r = run(
+    'INSERT INTO nk_abrechnungen (objekt_id, von, bis, gesamtkosten, daten) VALUES (?,?,?,?,?)',
+    objekt_id || null, von, bis, gesamtkosten || 0, JSON.stringify(daten || {})
+  );
+  return one('SELECT * FROM nk_abrechnungen WHERE id = ?', r.lastInsertRowid);
+});
+
+app.get('/api/nk/abrechnungen', () => all('SELECT * FROM nk_abrechnungen ORDER BY id DESC'));
+app.delete('/api/nk/abrechnungen/:id', (req) => {
+  run('DELETE FROM nk_abrechnungen WHERE id = ?', Number(req.params.id));
+  return { ok: true };
+});
+
+// Druckansicht (HTML, je Mieter eine Seite)
+app.get('/api/nk/abrechnungen/:id/druck', (req, reply) => {
+  const a = one('SELECT * FROM nk_abrechnungen WHERE id = ?', Number(req.params.id));
+  if (!a) return reply.code(404).send('nicht gefunden');
+  const objekt = a.objekt_id ? one('SELECT * FROM objekte WHERE id = ?', a.objekt_id) : null;
+  const m = mandant();
+  const daten = JSON.parse(a.daten || '{}');
+  reply.header('content-type', 'text/html; charset=utf-8');
+  return reply.send(druckHtml(a, daten, objekt, m));
+});
+
 // ---------- Dashboard ----------
 app.get('/api/dashboard', () => {
   const m = mandant();
@@ -410,6 +490,73 @@ app.get('/api/dashboard', () => {
     mandant: m,
   };
 });
+
+function eur(cent) {
+  return (cent / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+}
+function deDatum(s) {
+  const t = (s || '').slice(0, 10).split('-');
+  return t.length === 3 ? `${t[2]}.${t[1]}.${t[0]}` : s;
+}
+
+function druckHtml(a, daten, objekt, m) {
+  const zeilen = daten.zeilen || [];
+  const seiten = zeilen.map((z) => {
+    const nachzahlung = z.saldo < 0;
+    return `
+    <section class="seite">
+      <header>
+        <div class="absender">${esc(m.name)}${m.steuernummer ? ' · St-Nr. ' + esc(m.steuernummer) : ''}</div>
+        <h1>Nebenkostenabrechnung</h1>
+        <div class="zeitraum">Abrechnungszeitraum: ${deDatum(a.von)} – ${deDatum(a.bis)}</div>
+      </header>
+      <div class="empfaenger">
+        <strong>${esc(z.mieter)}</strong><br>
+        Mieteinheit: ${esc(z.einheit)}${objekt ? ' · ' + esc(objekt.name) : ''}
+      </div>
+      <table>
+        <tr><td>Umlagefähige Gesamtkosten</td><td class="r">${eur(a.gesamtkosten)}</td></tr>
+        <tr><td>Verteilerschlüssel</td><td class="r">Wohn-/Nutzfläche</td></tr>
+        <tr><td>Ihre Fläche / Gesamtfläche</td><td class="r">${z.flaeche} m² / ${daten.gesamtflaeche} m² (${z.anteil_prozent} %)</td></tr>
+        <tr class="sum"><td>Ihr Kostenanteil</td><td class="r">${eur(z.kostenanteil)}</td></tr>
+        <tr><td>Geleistete Vorauszahlungen (${z.monate} Monate)</td><td class="r">− ${eur(z.vorauszahlung)}</td></tr>
+        <tr class="ergebnis"><td>${nachzahlung ? 'Nachzahlung' : 'Guthaben'}</td><td class="r">${eur(Math.abs(z.saldo))}</td></tr>
+      </table>
+      <p class="hinweis">${nachzahlung
+        ? 'Bitte überweisen Sie den Nachzahlungsbetrag innerhalb von 30 Tagen.'
+        : 'Das Guthaben wird Ihnen erstattet bzw. verrechnet.'}</p>
+      <p class="fuss">Erstellt mit GBR-Immo · ${deDatum(a.erstellt_am)} · Angaben ohne Gewähr.</p>
+    </section>`;
+  }).join('');
+
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Nebenkostenabrechnung</title>
+  <style>
+    body{font-family:'Segoe UI',system-ui,sans-serif;color:#0f172a;margin:0;background:#fff}
+    .seite{max-width:720px;margin:0 auto;padding:48px;page-break-after:always}
+    header{border-bottom:2px solid #059669;padding-bottom:12px;margin-bottom:24px}
+    .absender{font-size:12px;color:#64748b}
+    h1{font-size:22px;margin:8px 0 4px}
+    .zeitraum{color:#475569;font-size:14px}
+    .empfaenger{margin:24px 0;font-size:15px;line-height:1.5}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    td{padding:10px 4px;border-bottom:1px solid #e2e8f0}
+    .r{text-align:right;font-variant-numeric:tabular-nums}
+    .sum td{font-weight:600;border-top:1px solid #cbd5e1}
+    .ergebnis td{font-weight:700;font-size:17px;border-top:2px solid #059669;border-bottom:none;color:#059669}
+    .hinweis{font-size:13px;color:#475569;margin-top:20px}
+    .fuss{font-size:11px;color:#94a3b8;margin-top:40px}
+    @media print{.noprint{display:none}}
+    .noprint{position:fixed;top:16px;right:16px}
+    button{background:#059669;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;cursor:pointer}
+  </style></head><body>
+  <div class="noprint"><button onclick="window.print()">Drucken / als PDF speichern</button></div>
+  ${seiten || '<section class="seite"><p>Keine Mieter mit Abrechnung.</p></section>'}
+  </body></html>`;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
 
 // ---------- Statisches Frontend ----------
 const clientDist = join(Pfade.ROOT, 'client', 'dist');

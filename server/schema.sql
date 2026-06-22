@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS mietvertraege (
   beginn      TEXT    NOT NULL DEFAULT '',
   ende        TEXT    NOT NULL DEFAULT '',
   kaution     INTEGER NOT NULL DEFAULT 0,
+  nk_vorauszahlung INTEGER NOT NULL DEFAULT 0, -- monatliche Nebenkosten-Vorauszahlung (Cent)
   aktiv       INTEGER NOT NULL DEFAULT 1,
   erstellt_am TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -113,6 +114,8 @@ CREATE TABLE IF NOT EXISTS buchungen (
   aufteilung_modus TEXT   NOT NULL DEFAULT 'direkt', -- 'direkt' | 'flaeche' | 'umsatz' | 'anteil' | 'keine'
   einheit_id      INTEGER REFERENCES einheiten(id) ON DELETE SET NULL, -- bei 'direkt'
   periode         TEXT    NOT NULL DEFAULT '',  -- z.B. '2026-Q2'
+  umlagefaehig    INTEGER,                      -- NULL=unbekannt, 1=ja, 0=nein (Nebenkosten)
+  nk_art          TEXT    NOT NULL DEFAULT '',  -- Betriebskostenart (BetrKV)
   storniert       INTEGER NOT NULL DEFAULT 0,
   festgeschrieben INTEGER NOT NULL DEFAULT 0,
   erstellt_am     TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -169,6 +172,17 @@ CREATE TABLE IF NOT EXISTS ustva_meldungen (
   status        TEXT    NOT NULL DEFAULT 'entwurf', -- 'entwurf' | 'festgeschrieben'
   erstellt_am   TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE(periode)
+);
+
+-- Nebenkostenabrechnungen (gespeicherte Ergebnisse)
+CREATE TABLE IF NOT EXISTS nk_abrechnungen (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  objekt_id   INTEGER REFERENCES objekte(id) ON DELETE SET NULL,
+  von         TEXT    NOT NULL,
+  bis         TEXT    NOT NULL,
+  gesamtkosten INTEGER NOT NULL DEFAULT 0,
+  daten       TEXT    NOT NULL DEFAULT '{}',  -- JSON: Zeilen je Mieter/Einheit
+  erstellt_am TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Dokumentenarchiv (Verträge, Grundbuch, Versicherungen ...)

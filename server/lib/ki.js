@@ -87,3 +87,37 @@ export async function belegAusDateiLesen({ apiKey, dataUrl, konten, einheiten, a
     { type: 'text', text: `Belegart: ${art}. Lies den Beleg vollständig aus und gib das JSON zurück.` },
   ]);
 }
+
+const NK_ARTEN = 'Grundsteuer, Wasser/Abwasser, Heizung/Warmwasser, Aufzug, Müllabfuhr, Straßenreinigung, Gebäudereinigung, Gartenpflege, Allgemeinstrom/Beleuchtung, Schornsteinreinigung, Sach-/Haftpflichtversicherung, Hauswart/Hausmeister, Antenne/Kabel, Sonstige Betriebskosten';
+
+/**
+ * Stuft Ausgaben-Buchungen als umlagefähig (Betriebskosten nach BetrKV) ein.
+ * @param {object} p { apiKey, buchungen: [{id, text}] }
+ * @returns {Promise<Array<{id, umlagefaehig:boolean, art:string, begruendung:string}>>}
+ */
+export async function nkKlassifizieren({ apiKey, buchungen }) {
+  if (!apiKey) throw new Error('Kein API-Schlüssel hinterlegt.');
+  const system = `Du bist Buchhaltungs-Assistent für eine deutsche Vermietung. Beurteile je Kostenposition,
+ob sie nach Betriebskostenverordnung (BetrKV) auf Mieter umlagefähig ist.
+
+Umlagefähig sind laufende Betriebskosten: ${NK_ARTEN}.
+NICHT umlagefähig sind u.a.: Instandhaltung/Reparaturen, Verwaltungskosten, Bank-/Kontoführung,
+Abschreibungen (AfA), Finanzierungskosten, einmalige Anschaffungen.
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Array, ein Objekt je Position:
+[{ "id": number, "umlagefaehig": boolean, "art": string, "begruendung": string }]
+"art" ist eine der genannten Betriebskostenarten (oder "" wenn nicht umlagefähig).`;
+
+  const liste = buchungen.map((b) => `id ${b.id}: ${b.text}`).join('\n');
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: MODELL, max_tokens: 2000, system, messages: [{ role: 'user', content: `Positionen:\n${liste}` }] }),
+  });
+  if (!res.ok) throw new Error(`KI-Fehler ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  const inhalt = (data.content || []).map((c) => c.text || '').join('');
+  const json = inhalt.match(/\[[\s\S]*\]/);
+  if (!json) throw new Error('KI-Antwort enthielt kein JSON-Array.');
+  return JSON.parse(json[0]);
+}

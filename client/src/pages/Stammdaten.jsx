@@ -215,7 +215,8 @@ function Vertraege() {
     const body = {
       einheit_id: Number(form.einheit_id), mieter_id: Number(form.mieter_id),
       nettomiete: euroZuCent(form.nettomiete_euro), ust_satz: form.ust_satz,
-      beginn: form.beginn || '', ende: form.ende || '', kaution: euroZuCent(form.kaution_euro), aktiv: 1,
+      beginn: form.beginn || '', ende: form.ende || '', kaution: euroZuCent(form.kaution_euro),
+      nk_vorauszahlung: euroZuCent(form.nk_vorauszahlung_euro), aktiv: 1,
     };
     if (form.id) await api.put(`/mietvertraege/${form.id}`, body);
     else await api.post('/mietvertraege', body);
@@ -228,14 +229,14 @@ function Vertraege() {
     <div className="space-y-4">
       {!bereit && <Hinweis ton="warn">Lege zuerst Einheiten und Mieter an, um Verträge zu erfassen.</Hinweis>}
       <Card title="Mietverträge" subtitle="Verknüpft Einheit, Mieter und Nettomiete"
-        actions={<Button disabled={!bereit} onClick={() => setForm({ einheit_id: einheiten[0]?.id, mieter_id: mieter[0]?.id, nettomiete_euro: '', ust_satz: '19', kaution_euro: '' })}>+ Vertrag</Button>}>
+        actions={<Button disabled={!bereit} onClick={() => setForm({ einheit_id: einheiten[0]?.id, mieter_id: mieter[0]?.id, nettomiete_euro: '', ust_satz: '19', kaution_euro: '', nk_vorauszahlung_euro: '' })}>+ Vertrag</Button>}>
         <Table
           columns={[
             { kopf: 'Einheit', zelle: (r) => <span className="font-medium text-slate-800">{einheitName(r.einheit_id)}</span> },
             { kopf: 'Mieter', zelle: (r) => mieterName(r.mieter_id) },
             { kopf: 'USt', zelle: (r) => <Badge color={USTFARBE[r.ust_satz]}>{USTLABEL[r.ust_satz]}</Badge> },
             { kopf: 'Nettomiete/Monat', align: 'right', zelle: (r) => fmtEuro(r.nettomiete) },
-            { kopf: '', align: 'right', zelle: (r) => <Button variant="ghost" onClick={() => setForm({ ...r, nettomiete_euro: (r.nettomiete / 100).toString().replace('.', ','), kaution_euro: (r.kaution / 100).toString().replace('.', ',') })}>Bearbeiten</Button> },
+            { kopf: '', align: 'right', zelle: (r) => <Button variant="ghost" onClick={() => setForm({ ...r, nettomiete_euro: (r.nettomiete / 100).toString().replace('.', ','), kaution_euro: (r.kaution / 100).toString().replace('.', ','), nk_vorauszahlung_euro: ((r.nk_vorauszahlung || 0) / 100).toString().replace('.', ',') })}>Bearbeiten</Button> },
           ]}
           rows={liste}
           leer="Noch kein Vertrag angelegt."
@@ -260,7 +261,10 @@ function Vertraege() {
               <Field label="Beginn"><Input type="date" value={form.beginn || ''} onChange={(e) => setForm({ ...form, beginn: e.target.value })} /></Field>
               <Field label="Ende (optional)"><Input type="date" value={form.ende || ''} onChange={(e) => setForm({ ...form, ende: e.target.value })} /></Field>
             </div>
-            <Field label="Kaution (€)"><Input value={form.kaution_euro} onChange={(e) => setForm({ ...form, kaution_euro: e.target.value })} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Kaution (€)"><Input value={form.kaution_euro} onChange={(e) => setForm({ ...form, kaution_euro: e.target.value })} /></Field>
+              <Field label="Nebenkosten-Vorauszahlung / Monat (€)" hint="Für die NK-Abrechnung"><Input value={form.nk_vorauszahlung_euro} onChange={(e) => setForm({ ...form, nk_vorauszahlung_euro: e.target.value })} /></Field>
+            </div>
             <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" onClick={() => setForm(null)}>Abbrechen</Button><Button onClick={speichern}>Speichern</Button></div>
           </div>
         )}

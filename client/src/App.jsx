@@ -7,6 +7,7 @@ import Buchen from './pages/Buchen.jsx';
 import Bank from './pages/Bank.jsx';
 import Ustva from './pages/Ustva.jsx';
 import Dokumente from './pages/Dokumente.jsx';
+import Nebenkosten from './pages/Nebenkosten.jsx';
 import Einstellungen from './pages/Einstellungen.jsx';
 import Assistent from './pages/Assistent.jsx';
 import SetupWizard from './components/SetupWizard.jsx';
@@ -19,6 +20,7 @@ const NAV = [
   { id: 'buchen', label: 'Buchen', icon: 'M4 6h16M4 12h16M4 18h10' },
   { id: 'bank', label: 'Bank', icon: 'M3 10l9-6 9 6M5 10v8h14v-8M3 18h18' },
   { id: 'ustva', label: 'USt-Voranmeldung', icon: 'M9 7h6M9 11h6M9 15h4M5 3h14v18H5z' },
+  { id: 'nebenkosten', label: 'Nebenkosten', icon: 'M3 13h2l2 5 3-12 3 9 2-5h6' },
   { id: 'dokumente', label: 'Dokumente', icon: 'M6 2h9l5 5v15H6zM15 2v5h5' },
   { id: 'einstellungen', label: 'Einstellungen', icon: 'M12 9a3 3 0 100 6 3 3 0 000-6zM4 12h2m12 0h2M12 4v2m0 12v2' },
 ];
@@ -47,6 +49,7 @@ export default function App() {
     buchen: <Buchen />,
     bank: <Bank />,
     ustva: <Ustva />,
+    nebenkosten: <Nebenkosten />,
     dokumente: <Dokumente />,
     einstellungen: <Einstellungen />,
   };
