@@ -105,8 +105,10 @@ NICHT umlagefähig sind u.a.: Instandhaltung/Reparaturen, Verwaltungskosten, Ban
 Abschreibungen (AfA), Finanzierungskosten, einmalige Anschaffungen.
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Array, ein Objekt je Position:
-[{ "id": number, "umlagefaehig": boolean, "art": string, "begruendung": string }]
-"art" ist eine der genannten Betriebskostenarten (oder "" wenn nicht umlagefähig).`;
+[{ "id": number, "umlagefaehig": boolean, "art": string, "schluessel": string, "begruendung": string }]
+"art" ist eine der genannten Betriebskostenarten (oder "" wenn nicht umlagefähig).
+"schluessel" ist der Umlageschlüssel: "verbrauch_heiz" bei Heizung/Warmwasser,
+"verbrauch_wasser" bei Wasser/Abwasser, sonst "flaeche".`;
 
   const liste = buchungen.map((b) => `id ${b.id}: ${b.text}`).join('\n');
   const res = await fetch(API, {

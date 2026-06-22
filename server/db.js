@@ -60,6 +60,9 @@ function migriere(db) {
   ergaenze('mietvertraege', 'nk_vorauszahlung', 'INTEGER NOT NULL DEFAULT 0');
   ergaenze('buchungen', 'umlagefaehig', 'INTEGER');
   ergaenze('buchungen', 'nk_art', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('buchungen', 'umlageschluessel', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('buchungen', 'import_hash', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('buchungen', 'herkunft', "TEXT NOT NULL DEFAULT ''");
 }
 
 function seed(db) {

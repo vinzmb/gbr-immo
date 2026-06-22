@@ -57,19 +57,41 @@ function NkWizard({ onClose, objekte }) {
   const [meldung, setMeldung] = useState('');
   const [abr, setAbr] = useState(null);
   const [gespeichertId, setGespeichertId] = useState(null);
+  const [einheiten, setEinheiten] = useState([]);
+  const [verbrauch, setVerbrauch] = useState({});
 
   const von = `${jahr}-01-01`;
   const bis = `${jahr}-12-31`;
 
   useEffect(() => { api.get('/mandant').then((m) => setKiAktiv(!!m.ki_aktiv)); }, []);
 
-  const ladeKosten = () => api.get(`/nk/kosten?von=${von}&bis=${bis}`).then((rows) =>
-    setKosten(rows.map((r) => ({ ...r, umlagefaehig: r.umlagefaehig === 1, nk_art: r.nk_art || '' }))));
-
-  const setUmlage = async (k, umlagefaehig, nk_art) => {
-    setKosten((list) => list.map((x) => (x.id === k.id ? { ...x, umlagefaehig, nk_art: nk_art ?? x.nk_art } : x)));
-    await api.put(`/buchungen/${k.id}/umlage`, { umlagefaehig, nk_art: nk_art ?? k.nk_art });
+  const ladeKosten = async () => {
+    const rows = await api.get(`/nk/kosten?von=${von}&bis=${bis}`);
+    setKosten(rows.map((r) => ({ ...r, umlagefaehig: r.umlagefaehig === 1, nk_art: r.nk_art || '', umlageschluessel: r.umlageschluessel || 'flaeche' })));
+    const eh = (await api.get('/einheiten')).filter((e) => e.objekt_id === Number(objektId));
+    setEinheiten(eh);
+    const vb = await api.get(`/nk/verbrauch?jahr=${jahr}`);
+    const map = {};
+    eh.forEach((e) => { const v = vb.find((x) => x.einheit_id === e.id); map[e.id] = { heizung: v?.heizung || '', wasser: v?.wasser || '', personen: v?.personen || '' }; });
+    setVerbrauch(map);
   };
+
+  const setUmlage = async (k, umlagefaehig, nk_art, umlageschluessel) => {
+    const art = nk_art ?? k.nk_art;
+    const schl = umlageschluessel ?? k.umlageschluessel ?? 'flaeche';
+    setKosten((list) => list.map((x) => (x.id === k.id ? { ...x, umlagefaehig, nk_art: art, umlageschluessel: schl } : x)));
+    await api.put(`/buchungen/${k.id}/umlage`, { umlagefaehig, nk_art: art, umlageschluessel: schl });
+  };
+
+  const setVerbrauchWert = (einheitId, feld, wert) =>
+    setVerbrauch((v) => ({ ...v, [einheitId]: { ...v[einheitId], [feld]: wert } }));
+  const verbrauchSpeichern = async () => {
+    for (const e of einheiten) {
+      const v = verbrauch[e.id] || {};
+      await api.put('/nk/verbrauch', { einheit_id: e.id, jahr, heizung: v.heizung || 0, wasser: v.wasser || 0, personen: v.personen || 0 });
+    }
+  };
+  const brauchtVerbrauch = kosten.some((k) => k.umlagefaehig && ['verbrauch_heiz', 'verbrauch_wasser', 'personen'].includes(k.umlageschluessel));
 
   const kiEinstufen = async () => {
     setKiLaedt(true); setMeldung('');
@@ -79,11 +101,11 @@ function NkWizard({ onClose, objekte }) {
       else {
         for (const v of res) {
           const k = kosten.find((x) => x.id === v.id);
-          if (k) await api.put(`/buchungen/${k.id}/umlage`, { umlagefaehig: !!v.umlagefaehig, nk_art: v.art || '' });
+          if (k) await api.put(`/buchungen/${k.id}/umlage`, { umlagefaehig: !!v.umlagefaehig, nk_art: v.art || '', umlageschluessel: v.schluessel || 'flaeche' });
         }
         setKosten((list) => list.map((k) => {
           const v = res.find((x) => x.id === k.id);
-          return v ? { ...k, umlagefaehig: !!v.umlagefaehig, nk_art: v.art || '' } : k;
+          return v ? { ...k, umlagefaehig: !!v.umlagefaehig, nk_art: v.art || '', umlageschluessel: v.schluessel || 'flaeche' } : k;
         }));
         setMeldung('KI-Einstufung übernommen — bitte prüfen.');
       }
@@ -97,7 +119,7 @@ function NkWizard({ onClose, objekte }) {
 
   const weiter = async () => {
     if (schritt === 0) { await ladeKosten(); }
-    if (schritt === 1) { await ladeAbrechnung(); }
+    if (schritt === 1) { await verbrauchSpeichern(); await ladeAbrechnung(); }
     setSchritt((s) => s + 1);
   };
   const zurueck = () => setSchritt((s) => Math.max(0, s - 1));
@@ -163,6 +185,15 @@ function NkWizard({ onClose, objekte }) {
               { kopf: 'Betriebskostenart', zelle: (r) => r.umlagefaehig
                 ? <Input value={r.nk_art} onChange={(e) => setUmlage(r, true, e.target.value)} placeholder="z. B. Grundsteuer" />
                 : <span className="text-slate-300 text-sm">—</span> },
+              { kopf: 'Verteilung', zelle: (r) => r.umlagefaehig
+                ? <Select value={r.umlageschluessel} onChange={(e) => setUmlage(r, true, undefined, e.target.value)}>
+                    <option value="flaeche">nach Fläche</option>
+                    <option value="verbrauch_heiz">Verbrauch Heizung</option>
+                    <option value="verbrauch_wasser">Verbrauch Wasser</option>
+                    <option value="personen">nach Personen</option>
+                    <option value="anteil">Miteigentumsanteil</option>
+                  </Select>
+                : <span className="text-slate-300 text-sm">—</span> },
               { kopf: 'Umlagefähig', align: 'right', zelle: (r) => (
                 <button onClick={() => setUmlage(r, !r.umlagefaehig)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium ${r.umlagefaehig ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
@@ -173,6 +204,25 @@ function NkWizard({ onClose, objekte }) {
             rows={kosten}
             leer="Keine Ausgaben in diesem Zeitraum gebucht."
           />
+          {brauchtVerbrauch && (
+            <div className="mt-5 rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-medium text-slate-700 mb-1">Zählerstände / Verbrauch je Einheit ({jahr})</div>
+              <p className="text-xs text-slate-400 mb-3">Für verbrauchsabhängige Posten. Ohne Werte wird ersatzweise nach Fläche verteilt.</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 text-xs text-slate-500 px-1">
+                  <div className="col-span-6">Einheit</div><div className="col-span-2">Heizung</div><div className="col-span-2">Wasser (m³)</div><div className="col-span-2">Personen</div>
+                </div>
+                {einheiten.map((e) => (
+                  <div key={e.id} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-6 text-sm text-slate-700">{e.bezeichnung}</div>
+                    <div className="col-span-2"><Input value={verbrauch[e.id]?.heizung ?? ''} onChange={(ev) => setVerbrauchWert(e.id, 'heizung', ev.target.value)} /></div>
+                    <div className="col-span-2"><Input value={verbrauch[e.id]?.wasser ?? ''} onChange={(ev) => setVerbrauchWert(e.id, 'wasser', ev.target.value)} /></div>
+                    <div className="col-span-2"><Input value={verbrauch[e.id]?.personen ?? ''} onChange={(ev) => setVerbrauchWert(e.id, 'personen', ev.target.value)} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

@@ -52,7 +52,8 @@ export function datevBuchungsstapel(buchungen, mandant, zeitraum) {
       const gegenkonto = b.gegenkonto || '1800'; // Bank
       const sh = istEinnahme ? 'H' : 'S';
       const bu = istEinnahme ? BU_UMSATZSTEUER[b.ust_satz] : BU_VORSTEUER[b.ust_satz];
-      const datum = b.datum.slice(5).replace('-', ''); // TTMM -> DDMM (DATEV: TTMM)
+      const [, mm, dd] = b.datum.split('-'); // YYYY-MM-DD
+      const datum = `${dd}${mm}`; // DATEV-Belegdatum: TTMM
       return [
         zahl(b.betrag_brutto), sh, 'EUR', sachkonto, gegenkonto, bu || '',
         datum, b.beleg_nr || b.beleg_id || '', b.buchungstext || '',

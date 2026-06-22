@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum, euroZuCent, fmtProzent } from '../api.js';
-import { Card, Button, Table, Field, Input, Select, Badge, Hinweis } from '../ui.jsx';
+import { Card, Button, Table, Field, Input, Select, Badge, Hinweis, Modal } from '../ui.jsx';
 
 const heute = () => new Date().toISOString().slice(0, 10);
 const MODUS = {
@@ -22,6 +22,7 @@ export default function Buchen() {
   const [mieter, setMieter] = useState([]);
   const [vorschau, setVorschau] = useState(null);
   const [meldung, setMeldung] = useState('');
+  const [soll, setSoll] = useState(null);
 
   const leer = {
     typ: 'ausgabe', datum: heute(), betrag_euro: '', ust_satz: '19', konto: '',
@@ -87,9 +88,12 @@ export default function Buchen() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-800">Buchen</h1>
-        <p className="text-slate-500 mt-1">Einnahmen und Ausgaben erfassen — mit anteiliger Vorsteuer-Aufteilung</p>
+      <header className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Buchen</h1>
+          <p className="text-slate-500 mt-1">Einnahmen und Ausgaben erfassen — mit anteiliger Vorsteuer-Aufteilung</p>
+        </div>
+        <Button variant="ghost" onClick={() => setSoll({ jahr: new Date().getFullYear(), modus: 'jahr', monat: new Date().getMonth() + 1, ergebnis: null })}>⟳ Sollstellungen erzeugen</Button>
       </header>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -217,6 +221,35 @@ export default function Buchen() {
           leer="Noch keine Buchung erfasst."
         />
       </Card>
+
+      <Modal titel="Sollstellungen automatisch erzeugen" offen={!!soll} onClose={() => setSoll(null)}>
+        {soll && (
+          <div className="space-y-4">
+            <Hinweis ton="info">Erzeugt für alle aktiven Mietverträge die Miet- und NK-Vorauszahlungs-Einnahmen (je Monat). Bereits vorhandene Sollstellungen werden übersprungen.</Hinweis>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Jahr"><Input type="number" value={soll.jahr} onChange={(e) => setSoll({ ...soll, jahr: Number(e.target.value) })} /></Field>
+              <Field label="Umfang">
+                <Select value={soll.modus} onChange={(e) => setSoll({ ...soll, modus: e.target.value })}>
+                  <option value="jahr">ganzes Jahr (12 Monate)</option>
+                  <option value="monat">einzelner Monat</option>
+                </Select>
+              </Field>
+            </div>
+            {soll.modus === 'monat' && (
+              <Field label="Monat"><Input type="number" min="1" max="12" value={soll.monat} onChange={(e) => setSoll({ ...soll, monat: Number(e.target.value) })} /></Field>
+            )}
+            {soll.ergebnis && <Hinweis ton="ok">{soll.ergebnis.erzeugt} Buchungen erzeugt · {soll.ergebnis.uebersprungen} übersprungen.</Hinweis>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setSoll(null)}>Schließen</Button>
+              <Button onClick={async () => {
+                const r = await api.post('/sollstellung/erzeugen', { jahr: soll.jahr, modus: soll.modus, monat: soll.monat });
+                setSoll({ ...soll, ergebnis: r });
+                ladeBuchungen();
+              }}>Erzeugen</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

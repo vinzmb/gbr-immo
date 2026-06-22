@@ -13,6 +13,8 @@ import { parseBank } from './lib/bankimport.js';
 import { belegKlassifizieren, belegAusDateiLesen, nkKlassifizieren } from './lib/ki.js';
 import { findeTreffer } from './lib/matching.js';
 import { nkBerechnen, monateImZeitraum } from './lib/nebenkosten.js';
+import { parseDatev, ustAusBu } from './lib/datevimport.js';
+import { elsterUStVAXml } from './lib/elster.js';
 
 const db = getDb();
 const app = Fastify({ logger: false, bodyLimit: 25 * 1024 * 1024 });
@@ -208,12 +210,12 @@ function buchungSpeichern(body) {
 
   const periode = periodeFuerDatum(body.datum, m.voranmeldungszeitraum);
   const r = run(
-    `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, periode)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, periode, import_hash, herkunft)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     body.datum, body.beleg_id || null, body.typ, body.konto || '', body.gegenkonto || '1800',
     body.betrag_brutto, body.ust_satz, ust_betrag, vorsteuer_abziehbar,
     body.steuerschluessel || '', body.buchungstext || '', buchung.aufteilung_modus,
-    buchung.einheit_id, periode
+    buchung.einheit_id, periode, body.import_hash || '', body.herkunft || ''
   );
   const id = r.lastInsertRowid;
   for (const s of splits) {
@@ -357,6 +359,81 @@ app.get('/api/export/datev', (req, reply) => {
   return reply.send(csv);
 });
 
+// ---------- DATEV-Buchungsstapel importieren ----------
+app.post('/api/import/datev', (req) => {
+  const { jahr, zeilen } = parseDatev(req.body.dateiinhalt || '');
+  const m = mandant();
+  const kontoMap = new Map(all('SELECT nummer, art, ust_satz FROM konten WHERE rahmen = ?', m.kontenrahmen).map((k) => [k.nummer, k]));
+  let neu = 0, dup = 0;
+  for (const z of zeilen) {
+    if (one('SELECT id FROM buchungen WHERE import_hash = ?', z.import_hash)) { dup++; continue; }
+    const kInfo = kontoMap.get(z.konto);
+    const gInfo = kontoMap.get(z.gegenkonto);
+    let sach = z.konto, typ, sachInfo = kInfo;
+    if (kInfo && kInfo.art === 'erloes') typ = 'einnahme';
+    else if (kInfo && kInfo.art === 'aufwand') typ = 'ausgabe';
+    else if (gInfo && gInfo.art === 'erloes') { typ = 'einnahme'; sach = z.gegenkonto; sachInfo = gInfo; }
+    else if (gInfo && gInfo.art === 'aufwand') { typ = 'ausgabe'; sach = z.gegenkonto; sachInfo = gInfo; }
+    else typ = z.sollhaben === 'H' ? 'einnahme' : 'ausgabe';
+    const ust = ustAusBu(z.bu) || (sachInfo ? sachInfo.ust_satz : '') || 'frei';
+    buchungSpeichern({
+      datum: z.datum, typ, betrag_brutto: z.umsatz_cent, ust_satz: ust,
+      konto: sach, gegenkonto: (sach === z.konto ? z.gegenkonto : z.konto) || '1800',
+      aufteilung_modus: 'keine', buchungstext: z.buchungstext || z.belegfeld1,
+      import_hash: z.import_hash, herkunft: 'datev',
+    });
+    neu++;
+  }
+  return { jahr, gefunden: zeilen.length, neu, duplikate: dup };
+});
+
+// ---------- Sollstellungen automatisch erzeugen ----------
+const SATZN = { '19': 19, '7': 7, frei: 0 };
+function bruttoAusNetto(netto, satz) {
+  return netto + Math.round((netto * (SATZN[satz] || 0)) / 100);
+}
+app.post('/api/sollstellung/erzeugen', (req) => {
+  const jahr = Number(req.body.jahr);
+  const monate = req.body.modus === 'monat' ? [Number(req.body.monat)] : Array.from({ length: 12 }, (_, i) => i + 1);
+  const vertraege = all('SELECT * FROM mietvertraege WHERE aktiv = 1');
+  const einheitName = (id) => one('SELECT bezeichnung FROM einheiten WHERE id = ?', id)?.bezeichnung || '';
+  const kontoMiete = { '19': '4860', '7': '4861', frei: '4862' };
+  const kontoNk = { '19': '4863', '7': '4863', frei: '4865' };
+  let erzeugt = 0, uebersprungen = 0;
+  const anlegen = (datum, einheit_id, konto, ust_satz, brutto, text) => {
+    if (brutto <= 0) return;
+    if (one('SELECT id FROM buchungen WHERE buchungstext = ? AND storniert = 0', text)) { uebersprungen++; return; }
+    buchungSpeichern({
+      datum, typ: 'einnahme', betrag_brutto: brutto, ust_satz, konto, gegenkonto: '1800',
+      aufteilung_modus: 'direkt', einheit_id, buchungstext: text, herkunft: 'sollstellung',
+    });
+    erzeugt++;
+  };
+  for (const mo of monate) {
+    const mm = String(mo).padStart(2, '0');
+    const datum = `${jahr}-${mm}-01`;
+    for (const v of vertraege) {
+      const en = einheitName(v.einheit_id);
+      anlegen(datum, v.einheit_id, kontoMiete[v.ust_satz] || '4860', v.ust_satz,
+        bruttoAusNetto(v.nettomiete, v.ust_satz), `Mietsollstellung ${mm}/${jahr} · ${en}`);
+      anlegen(datum, v.einheit_id, kontoNk[v.ust_satz] || '4863', v.ust_satz,
+        bruttoAusNetto(v.nk_vorauszahlung || 0, v.ust_satz), `NK-Vorauszahlung ${mm}/${jahr} · ${en}`);
+    }
+  }
+  return { erzeugt, uebersprungen };
+});
+
+// ---------- ELSTER-XML der UStVA ----------
+app.get('/api/export/elster', (req, reply) => {
+  const periode = req.query.periode;
+  const r = ustvaFuerPeriode(periode);
+  const heute = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const xml = elsterUStVAXml(r, mandant(), periode, heute);
+  reply.header('content-type', 'application/xml; charset=utf-8');
+  reply.header('content-disposition', `attachment; filename="ELSTER_UStVA_${periode}.xml"`);
+  return reply.send(xml);
+});
+
 // ---------- KI ----------
 app.post('/api/ki/beleg', async (req) => {
   const m = mandant();
@@ -396,10 +473,21 @@ app.post('/api/ki/beleg-datei', async (req) => {
 // ---------- Nebenkosten ----------
 // Umlage-Einstufung einer Buchung persistieren
 app.put('/api/buchungen/:id/umlage', (req) => {
-  run('UPDATE buchungen SET umlagefaehig = ?, nk_art = ? WHERE id = ?',
+  run('UPDATE buchungen SET umlagefaehig = ?, nk_art = ?, umlageschluessel = ? WHERE id = ?',
     req.body.umlagefaehig == null ? null : (req.body.umlagefaehig ? 1 : 0),
-    req.body.nk_art || '', Number(req.params.id));
+    req.body.nk_art || '', req.body.umlageschluessel || '', Number(req.params.id));
   return one('SELECT * FROM buchungen WHERE id = ?', Number(req.params.id));
+});
+
+// Verbrauchswerte je Einheit/Jahr
+app.get('/api/nk/verbrauch', (req) =>
+  all('SELECT * FROM nk_verbrauch WHERE jahr = ?', Number(req.query.jahr)));
+app.put('/api/nk/verbrauch', (req) => {
+  const { einheit_id, jahr, heizung, wasser, personen } = req.body;
+  run(`INSERT INTO nk_verbrauch (einheit_id, jahr, heizung, wasser, personen) VALUES (?,?,?,?,?)
+       ON CONFLICT(einheit_id, jahr) DO UPDATE SET heizung=excluded.heizung, wasser=excluded.wasser, personen=excluded.personen`,
+    Number(einheit_id), Number(jahr), Number(heizung) || 0, Number(wasser) || 0, Number(personen) || 0);
+  return { ok: true };
 });
 
 // Ausgaben-Buchungen eines Zeitraums (Kandidaten für Umlage)
@@ -434,11 +522,21 @@ function nkAbrechnung(objektId, von, bis, vorauszahlungOverride) {
     "SELECT * FROM buchungen WHERE typ = 'ausgabe' AND storniert = 0 AND umlagefaehig = 1 AND datum >= ? AND datum <= ?",
     von, bis
   );
-  const gesamtkosten = umlage.reduce((a, b) => a + b.betrag_brutto, 0);
+  // Kosten je Umlageschlüssel gruppieren
+  const kostenNachSchluessel = {};
+  for (const b of umlage) {
+    const s = b.umlageschluessel || 'flaeche';
+    kostenNachSchluessel[s] = (kostenNachSchluessel[s] || 0) + b.betrag_brutto;
+  }
+  const jahr = Number(von.slice(0, 4));
+  const verbrauch = {};
+  for (const v of all('SELECT * FROM nk_verbrauch WHERE jahr = ?', jahr)) {
+    verbrauch[v.einheit_id] = { heizung: v.heizung, wasser: v.wasser, personen: v.personen };
+  }
   const vertraege = all('SELECT * FROM mietvertraege WHERE aktiv = 1');
   const mieterName = new Map(all('SELECT id, name FROM mieter').map((m) => [m.id, m.name]));
   const monate = monateImZeitraum(von, bis);
-  const res = nkBerechnen({ einheiten, gesamtkosten, vertraege, mieterName, monate, vorauszahlungOverride: vorauszahlungOverride || {} });
+  const res = nkBerechnen({ einheiten, kostenNachSchluessel, verbrauch, vertraege, mieterName, monate, vorauszahlungOverride: vorauszahlungOverride || {} });
   return { objekt_id: objektId, von, bis, monate, positionen: umlage.length, ...res };
 }
 

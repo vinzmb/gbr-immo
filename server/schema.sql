@@ -116,6 +116,9 @@ CREATE TABLE IF NOT EXISTS buchungen (
   periode         TEXT    NOT NULL DEFAULT '',  -- z.B. '2026-Q2'
   umlagefaehig    INTEGER,                      -- NULL=unbekannt, 1=ja, 0=nein (Nebenkosten)
   nk_art          TEXT    NOT NULL DEFAULT '',  -- Betriebskostenart (BetrKV)
+  umlageschluessel TEXT   NOT NULL DEFAULT '',  -- '', flaeche, verbrauch_heiz, verbrauch_wasser, personen, anteil
+  import_hash     TEXT    NOT NULL DEFAULT '',  -- Dedup für DATEV-Import
+  herkunft        TEXT    NOT NULL DEFAULT '',  -- '', 'datev', 'sollstellung'
   storniert       INTEGER NOT NULL DEFAULT 0,
   festgeschrieben INTEGER NOT NULL DEFAULT 0,
   erstellt_am     TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -172,6 +175,17 @@ CREATE TABLE IF NOT EXISTS ustva_meldungen (
   status        TEXT    NOT NULL DEFAULT 'entwurf', -- 'entwurf' | 'festgeschrieben'
   erstellt_am   TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE(periode)
+);
+
+-- Verbrauchswerte je Einheit und Jahr (für verbrauchsabhängige Umlage)
+CREATE TABLE IF NOT EXISTS nk_verbrauch (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  einheit_id  INTEGER NOT NULL REFERENCES einheiten(id) ON DELETE CASCADE,
+  jahr        INTEGER NOT NULL,
+  heizung     REAL    NOT NULL DEFAULT 0,  -- z.B. kWh oder Einheiten
+  wasser      REAL    NOT NULL DEFAULT 0,  -- z.B. m³
+  personen    REAL    NOT NULL DEFAULT 0,
+  UNIQUE(einheit_id, jahr)
 );
 
 -- Nebenkostenabrechnungen (gespeicherte Ergebnisse)

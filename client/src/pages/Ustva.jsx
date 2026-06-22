@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum } from '../api.js';
-import { Card, Button, Hinweis, Badge } from '../ui.jsx';
+import { Card, Button, Hinweis, Badge, Field } from '../ui.jsx';
 
 export default function Ustva() {
   const [mandant, setMandant] = useState(null);
@@ -23,6 +23,18 @@ export default function Ustva() {
   };
 
   const datevExport = () => { window.open(`/api/export/datev?periode=${periode}`, '_blank'); };
+  const elsterExport = () => { window.open(`/api/export/elster?periode=${periode}`, '_blank'); };
+  const [importErgebnis, setImportErgebnis] = useState(null);
+  const datevImport = (file) => {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      const res = await api.post('/import/datev', { dateiinhalt: r.result });
+      setImportErgebnis(res);
+      laden();
+    };
+    r.readAsText(file, 'utf-8');
+  };
 
   if (!mandant) return <div className="text-slate-400">Lädt …</div>;
   const zr = mandant.voranmeldungszeitraum;
@@ -80,16 +92,29 @@ export default function Ustva() {
 
           <div className="flex flex-wrap gap-3">
             <Button onClick={datevExport}>DATEV-Buchungsstapel exportieren</Button>
+            <Button onClick={elsterExport}>ELSTER-XML exportieren</Button>
             <Button variant="ghost" onClick={festschreiben}>Voranmeldung festschreiben</Button>
           </div>
 
           <Hinweis ton="warn">
             <strong>Hinweis:</strong> Die Berechnung unterstützt die Vorbereitung, ersetzt aber keine Steuerberatung.
-            Die DATEV-Konten- und BU-Schlüssel sind mit deinem Steuerberater abzustimmen. Der direkte ELSTER-Versand
-            folgt in einer späteren Ausbaustufe.
+            Die DATEV-Konten- und BU-Schlüssel sind mit deinem Steuerberater abzustimmen. Die <strong>ELSTER-XML</strong>
+            enthält die UStVA-Kennzahlen; der <em>tatsächliche Versand</em> ans Finanzamt erfordert zusätzlich die
+            ERiC-Schnittstelle und ein ELSTER-Zertifikat.
           </Hinweis>
         </>
       )}
+
+      <Card title="DATEV-Buchungen importieren" subtitle="Bestehenden DATEV-Buchungsstapel (EXTF-CSV) einlesen und Buchungen ableiten">
+        <Field label="DATEV-Datei (.csv)">
+          <input type="file" accept=".csv,.txt" onChange={(e) => datevImport(e.target.files[0])} className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200" />
+        </Field>
+        {importErgebnis && (
+          <div className="mt-3">
+            <Hinweis ton="ok">{importErgebnis.gefunden} Zeilen erkannt (Jahr {importErgebnis.jahr}) · {importErgebnis.neu} neu importiert · {importErgebnis.duplikate} Duplikate übersprungen.</Hinweis>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

@@ -62,12 +62,24 @@ docs/             Design-Spezifikation
 node server/lib/steuer.test.mjs
 ```
 
+## Automatisierung
+
+- **DATEV-Buchungen importieren** (UStVA-Seite): bestehenden EXTF-Buchungsstapel
+  einlesen; Typ/USt/Vorsteuer werden aus Konto und BU-Schlüssel abgeleitet.
+- **Sollstellungen erzeugen** (Buchen-Seite): Miete + NK-Vorauszahlung je aktivem
+  Vertrag automatisch als Einnahmen buchen (mit Dedup).
+- **Verbrauchsabhängige Umlage** (NK-Assistent): je Kostenposition Schlüssel wählbar
+  (Fläche / Verbrauch Heizung / Verbrauch Wasser / Personen / Anteil), Zählerstände je Einheit.
+- **ELSTER-XML-Export** der UStVA. Der tatsächliche Versand erfordert zusätzlich die
+  ERiC-Bibliothek + ELSTER-Zertifikat (noch nicht enthalten).
+
 ## Status & nächste Stufen
 
-Stufe 1 (umgesetzt): Stammdaten, Belege, Buchen mit Aufteilung, Bankimport,
-KI-Assistent, UStVA-Berechnung, DATEV-Export, Dokumentenarchiv.
+Umgesetzt: Stammdaten, Belege (+OCR), Buchen mit Aufteilung (inkl. manuell/mehrere Mieter),
+Bankimport + Matching, KI-Assistent, UStVA + DATEV/ELSTER-Export, DATEV-Import,
+Sollstellungen, Nebenkostenabrechnung (verbrauchsabhängig), Dokumentenarchiv.
 
-Geplant: erweiterte Steuererklärungs-Reports, OCR-Auslesung, **ELSTER-Direktversand**.
+Geplant: tatsächlicher **ELSTER-Versand** (ERiC + Zertifikat), Steuererklärungs-Reports.
 
 > Hinweis: Die App unterstützt die Vorbereitung, ersetzt aber keine Steuerberatung.
 > DATEV-Konten und BU-Schlüssel sind mit dem Steuerberater abzustimmen.
