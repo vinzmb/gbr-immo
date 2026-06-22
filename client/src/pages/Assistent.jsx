@@ -58,6 +58,8 @@ function Buchungsstapel({ zurueck, gehe }) {
   const [form, setForm] = useState(null);
   const [kiLaedt, setKiLaedt] = useState(false);
   const [kiFehler, setKiFehler] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [verbrauchteBelege, setVerbrauchteBelege] = useState([]);
   const [zaehler, setZaehler] = useState({ gebucht: 0, uebersprungen: 0, ignoriert: 0 });
 
   useEffect(() => {
@@ -82,15 +84,21 @@ function Buchungsstapel({ zurueck, gehe }) {
   useEffect(() => {
     if (!queue || idx >= queue.length) return;
     const it = queue[idx];
+    // Bereits über ein Bank-Match mitgebuchten Beleg automatisch überspringen.
+    if (it.kind === 'beleg' && verbrauchteBelege.includes(it.data.id)) { setIdx((i) => i + 1); return; }
     const einnahme = it.kind === 'bank' ? it.data.betrag >= 0 : it.data.art === 'ausgang';
     setForm({
       typ: einnahme ? 'einnahme' : 'ausgabe',
       ust_satz: '19', konto: '',
       aufteilung_modus: einnahme ? 'direkt' : 'flaeche',
-      einheit_id: '', objekt_id: '',
+      einheit_id: '', objekt_id: '', beleg_id: null,
     });
     setKiFehler('');
-  }, [queue, idx]);
+    setMatches([]);
+    if (it.kind === 'bank') {
+      api.get(`/bank/umsaetze/${it.data.id}/matches`).then((m) => setMatches(m.filter((x) => !verbrauchteBelege.includes(x.beleg.id)))).catch(() => {});
+    }
+  }, [queue, idx, verbrauchteBelege]);
 
   if (!queue) return <div className="text-slate-400">Lädt …</div>;
 
@@ -137,7 +145,9 @@ function Buchungsstapel({ zurueck, gehe }) {
         aufteilung_modus: einnahme ? 'direkt' : form.aufteilung_modus,
         einheit_id: form.einheit_id ? Number(form.einheit_id) : null,
         objekt_id: form.objekt_id ? Number(form.objekt_id) : null,
+        beleg_id: form.beleg_id || null,
       });
+      if (form.beleg_id) setVerbrauchteBelege((v) => [...v, form.beleg_id]);
     } else {
       await api.post('/buchungen', {
         typ: form.typ, datum: d.datum, beleg_id: d.id, betrag_brutto: d.betrag_brutto,
@@ -204,6 +214,28 @@ function Buchungsstapel({ zurueck, gehe }) {
             <Detail label={it.kind === 'bank' ? 'Verwendungszweck' : 'Beschreibung'} wert={(it.kind === 'bank' ? d.verwendungszweck : d.beschreibung) || '–'} />
             {it.kind === 'beleg' && d.datei_pfad && (
               <a className="text-sm text-emerald-600 hover:underline" href={`/api/belege/${d.id}/datei`} target="_blank" rel="noreferrer">Belegdatei öffnen</a>
+            )}
+
+            {it.kind === 'bank' && matches.length > 0 && (
+              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+                  <span>🔗</span> Passender Beleg gefunden
+                </div>
+                {matches.map((m) => (
+                  <div key={m.beleg.id} className="flex items-center justify-between bg-white rounded-lg border border-emerald-100 px-3 py-2">
+                    <div className="text-sm">
+                      <div className="font-medium text-slate-800">{m.beleg.partner || m.beleg.beschreibung || 'Beleg'} · {fmtEuro(m.beleg.betrag_brutto)}</div>
+                      <div className="text-xs text-slate-500">{fmtDatum(m.beleg.datum)} · {m.gruende.join(', ')} · {m.score}%</div>
+                    </div>
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, beleg_id: f.beleg_id === m.beleg.id ? null : m.beleg.id }))}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-lg ${form.beleg_id === m.beleg.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      {form.beleg_id === m.beleg.id ? 'verknüpft ✓' : 'Übernehmen'}
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </Card>

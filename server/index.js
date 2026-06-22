@@ -11,6 +11,7 @@ import {
 import { datevBuchungsstapel } from './lib/datev.js';
 import { parseBank } from './lib/bankimport.js';
 import { belegKlassifizieren } from './lib/ki.js';
+import { findeTreffer } from './lib/matching.js';
 
 const db = getDb();
 const app = Fastify({ logger: false, bodyLimit: 25 * 1024 * 1024 });
@@ -80,8 +81,9 @@ app.post('/api/dokumente', (req) => {
     writeFileSync(join(Pfade.BELEGE_DIR, name), buf);
   }
   const r = run(
-    'INSERT INTO dokumente (titel, kategorie, objekt_id, datei_pfad, datei_hash, notiz) VALUES (?,?,?,?,?,?)',
-    b.titel || 'Ohne Titel', b.kategorie || 'sonstiges', b.objekt_id || null, datei_pfad, datei_hash, b.notiz || ''
+    'INSERT INTO dokumente (titel, kategorie, objekt_id, mieter_id, einheit_id, datum, datei_pfad, datei_hash, notiz) VALUES (?,?,?,?,?,?,?,?,?)',
+    b.titel || 'Ohne Titel', b.kategorie || 'sonstiges', b.objekt_id || null,
+    b.mieter_id || null, b.einheit_id || null, b.datum || '', datei_pfad, datei_hash, b.notiz || ''
   );
   return one('SELECT * FROM dokumente WHERE id = ?', r.lastInsertRowid);
 });
@@ -275,7 +277,15 @@ app.put('/api/bank/umsaetze/:id', (req) => {
   return one('SELECT * FROM bank_umsaetze WHERE id = ?', Number(req.params.id));
 });
 
-// Bankumsatz direkt verbuchen + als erledigt markieren
+// Automatisches Matching: passende offene Belege zu einem Bankumsatz
+app.get('/api/bank/umsaetze/:id/matches', (req) => {
+  const u = one('SELECT * FROM bank_umsaetze WHERE id = ?', Number(req.params.id));
+  if (!u) return [];
+  const offeneBelege = all("SELECT * FROM belege WHERE status != 'gebucht'");
+  return findeTreffer(u, offeneBelege);
+});
+
+// Bankumsatz direkt verbuchen + als erledigt markieren (optional mit Beleg-Verknüpfung)
 app.post('/api/bank/umsaetze/:id/verbuchen', (req) => {
   const u = one('SELECT * FROM bank_umsaetze WHERE id = ?', Number(req.params.id));
   if (!u) return { error: 'nicht gefunden' };
@@ -285,6 +295,7 @@ app.post('/api/bank/umsaetze/:id/verbuchen', (req) => {
     ust_satz: req.body.ust_satz || '19', konto: req.body.konto || '',
     gegenkonto: '1800', aufteilung_modus: req.body.aufteilung_modus,
     einheit_id: req.body.einheit_id || null, objekt_id: req.body.objekt_id || null,
+    beleg_id: req.body.beleg_id || null,
     buchungstext: u.verwendungszweck.slice(0, 60),
   });
   run("UPDATE bank_umsaetze SET status = 'erledigt', buchung_id = ? WHERE id = ?", buchung.id, u.id);

@@ -41,8 +41,22 @@ export function getDb() {
   db.exec('PRAGMA foreign_keys = ON;');
   const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
   db.exec(schema);
+  migriere(db);
   seed(db);
   return db;
+}
+
+// Sanfte Migrationen für bestehende Datenbanken (Spalten nachrüsten).
+function migriere(db) {
+  const spalten = (tabelle) => db.prepare(`PRAGMA table_info(${tabelle})`).all().map((r) => r.name);
+  const ergaenze = (tabelle, spalte, definition) => {
+    if (!spalten(tabelle).includes(spalte)) {
+      db.exec(`ALTER TABLE ${tabelle} ADD COLUMN ${spalte} ${definition}`);
+    }
+  };
+  ergaenze('dokumente', 'mieter_id', 'INTEGER');
+  ergaenze('dokumente', 'einheit_id', 'INTEGER');
+  ergaenze('dokumente', 'datum', "TEXT NOT NULL DEFAULT ''");
 }
 
 function seed(db) {
