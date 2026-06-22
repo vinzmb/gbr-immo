@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync, readdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { getDb, Pfade } from './db.js';
@@ -17,7 +17,7 @@ import { parseDatev, ustAusBu } from './lib/datevimport.js';
 import { elsterUStVAXml } from './lib/elster.js';
 
 const db = getDb();
-const app = Fastify({ logger: false, bodyLimit: 25 * 1024 * 1024 });
+const app = Fastify({ logger: false, bodyLimit: 256 * 1024 * 1024 });
 
 // ---------- Hilfsfunktionen ----------
 const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -673,6 +673,69 @@ function druckHtml(a, daten, objekt, m) {
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
+
+// ---------- Version & Datensicherung / Synchronisierung ----------
+function appVersion() {
+  try {
+    return JSON.parse(readFileSync(join(Pfade.ROOT, 'package.json'), 'utf8')).version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+app.get('/api/version', () => ({ version: appVersion() }));
+
+// Tabellen in FK-sicherer Reihenfolge (Eltern vor Kindern).
+const SYNC_TABELLEN = [
+  'mandant', 'konten', 'objekte', 'mieter', 'einheiten', 'mietvertraege',
+  'bank_konten', 'belege', 'buchungen', 'buchung_splits', 'bank_umsaetze',
+  'ustva_meldungen', 'dokumente', 'nk_verbrauch', 'nk_abrechnungen',
+];
+
+// Kompletten Datenstand als eine Datei exportieren (Sicherung / Weitergabe).
+app.get('/api/sync/export', (req, reply) => {
+  const tabellen = {};
+  for (const t of SYNC_TABELLEN) tabellen[t] = all(`SELECT * FROM ${t}`);
+  const dateien = [];
+  if (existsSync(Pfade.BELEGE_DIR)) {
+    for (const name of readdirSync(Pfade.BELEGE_DIR)) {
+      try { dateien.push({ name, base64: readFileSync(join(Pfade.BELEGE_DIR, name)).toString('base64') }); } catch { /* skip */ }
+    }
+  }
+  const paket = { app: 'GBR-Immo', format: 1, version: appVersion(), exportiert_am: new Date().toISOString(), mandant: mandant().name, tabellen, dateien };
+  const datum = new Date().toISOString().slice(0, 10);
+  reply.header('content-type', 'application/json; charset=utf-8');
+  reply.header('content-disposition', `attachment; filename="GBR-Immo-Daten-${datum}.gbr"`);
+  return reply.send(JSON.stringify(paket));
+});
+
+// Datenstand aus einer Datei importieren (ersetzt die aktuellen Daten, mit Sicherung).
+app.post('/api/sync/import', (req) => {
+  const paket = req.body;
+  if (!paket || paket.app !== 'GBR-Immo' || !paket.tabellen) return { error: 'Das ist keine gültige GBR-Immo-Sicherungsdatei.' };
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    copyFileSync(Pfade.DB_PFAD, join(Pfade.BACKUP_DIR, `vor-import-${stamp}.db`));
+  } catch { /* best effort */ }
+
+  db.exec('PRAGMA foreign_keys = OFF;');
+  for (const t of [...SYNC_TABELLEN].reverse()) { try { run(`DELETE FROM ${t}`); } catch { /* skip */ } }
+  let zeilen = 0;
+  for (const t of SYNC_TABELLEN) {
+    for (const row of paket.tabellen[t] || []) {
+      const cols = Object.keys(row);
+      if (!cols.length) continue;
+      const platz = cols.map(() => '?').join(',');
+      try { run(`INSERT INTO ${t} (${cols.join(',')}) VALUES (${platz})`, ...cols.map((c) => row[c])); zeilen++; } catch { /* skip */ }
+    }
+  }
+  db.exec('PRAGMA foreign_keys = ON;');
+
+  let dateien = 0;
+  for (const f of paket.dateien || []) {
+    try { writeFileSync(join(Pfade.BELEGE_DIR, f.name), Buffer.from(f.base64, 'base64')); dateien++; } catch { /* skip */ }
+  }
+  return { ok: true, zeilen, dateien, exportiert_am: paket.exportiert_am };
+});
 
 // ---------- Statisches Frontend ----------
 const clientDist = join(Pfade.ROOT, 'client', 'dist');

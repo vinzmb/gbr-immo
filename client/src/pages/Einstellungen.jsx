@@ -1,12 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { Card, Button, Field, Input, Select, Hinweis, Textarea } from '../ui.jsx';
+import { Card, Button, Field, Input, Select, Hinweis, Textarea, Erklaerung } from '../ui.jsx';
 
 export default function Einstellungen() {
   const [m, setM] = useState(null);
   const [meldung, setMeldung] = useState('');
+  const [version, setVersion] = useState('');
+  const [importMeldung, setImportMeldung] = useState(null);
+  const [importLaedt, setImportLaedt] = useState(false);
 
-  useEffect(() => { api.get('/mandant').then(setM); }, []);
+  useEffect(() => {
+    api.get('/mandant').then(setM);
+    api.get('/version').then((v) => setVersion(v.version)).catch(() => {});
+  }, []);
+
+  const datenExportieren = () => window.open('/api/sync/export', '_blank');
+
+  const datenImportieren = (file) => {
+    if (!file) return;
+    if (!confirm('Achtung: Beim Import werden alle aktuellen Daten durch den Inhalt der Datei ersetzt. Vorher wird automatisch eine Sicherung angelegt. Fortfahren?')) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      setImportLaedt(true); setImportMeldung(null);
+      try {
+        const res = await api.post('/sync/import', JSON.parse(r.result));
+        if (res.error) setImportMeldung({ ton: 'warn', text: res.error });
+        else {
+          setImportMeldung({ ton: 'ok', text: `${res.zeilen} Datensätze und ${res.dateien} Dateien importiert. Die App lädt neu …` });
+          setTimeout(() => window.location.reload(), 1500);
+        }
+      } catch (e) {
+        setImportMeldung({ ton: 'warn', text: 'Die Datei konnte nicht gelesen werden: ' + e.message });
+      }
+      setImportLaedt(false);
+    };
+    r.readAsText(file, 'utf-8');
+  };
   if (!m) return <div className="text-slate-400">Lädt …</div>;
 
   const speichern = async () => {
@@ -77,6 +106,40 @@ export default function Einstellungen() {
 
       {meldung && <Hinweis ton="ok">{meldung}</Hinweis>}
       <div className="flex justify-end"><Button onClick={speichern}>Speichern</Button></div>
+
+      <Card title="Daten sichern & an andere weitergeben" subtitle="Für Sicherungen und das Arbeiten zu mehreren">
+        <div className="space-y-4">
+          <Erklaerung titel="Wie arbeitet ihr zu mehreren?">
+            <p>So gebt ihr den Stand sicher weiter, ohne dass etwas durcheinandergerät:</p>
+            <p><strong>1.</strong> Wer fertig ist, klickt <strong>„Daten exportieren“</strong> – es entsteht eine Datei (Endung <code>.gbr</code>).</p>
+            <p><strong>2.</strong> Diese Datei schickst du dem Nächsten (z. B. per E-Mail oder USB-Stick).</p>
+            <p><strong>3.</strong> Der Nächste wählt sie unter <strong>„Daten importieren“</strong> aus und arbeitet weiter.</p>
+            <p>Es arbeitet also immer nur eine Person zur Zeit am Stand – so kann nichts kollidieren. Die Datei enthält alles: Buchungen, Belege, Dokumente.</p>
+          </Erklaerung>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={datenExportieren}>📤 Daten exportieren (Sicherung)</Button>
+            <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 cursor-pointer">
+              📥 Daten importieren
+              <input type="file" accept=".gbr,.json" className="hidden" onChange={(e) => datenImportieren(e.target.files[0])} disabled={importLaedt} />
+            </label>
+          </div>
+          <Hinweis ton="warn">Beim Import werden die aktuellen Daten <strong>ersetzt</strong> (vorher wird automatisch eine Sicherung im Ordner <code>daten/backups</code> angelegt).</Hinweis>
+          {importMeldung && <Hinweis ton={importMeldung.ton}>{importMeldung.text}</Hinweis>}
+        </div>
+      </Card>
+
+      <Card title="Version & Updates">
+        <div className="space-y-3">
+          <div className="text-sm text-slate-600">Installierte Version: <strong className="text-slate-800">{version || '…'}</strong></div>
+          <Erklaerung titel="Wie aktualisiere ich die App?">
+            <p><strong>1.</strong> Sichere zur Sicherheit kurz deine Daten (Knopf oben).</p>
+            <p><strong>2.</strong> Lade die neue Version herunter und entpacke sie.</p>
+            <p><strong>3.</strong> Ersetze die Programmdateien – <strong>aber behalte den Ordner <code>daten/</code></strong> (darin liegen alle deine Eingaben).</p>
+            <p><strong>4.</strong> Führe einmal <strong><code>update.bat</code></strong> aus und starte dann wie gewohnt mit <code>start.bat</code>.</p>
+            <p>Deine Daten bleiben dabei erhalten; nötige Anpassungen an der Datenbank macht die App beim Start automatisch.</p>
+          </Erklaerung>
+        </div>
+      </Card>
     </div>
   );
 }

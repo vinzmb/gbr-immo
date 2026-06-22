@@ -40,6 +40,29 @@ Voraussetzung: [Node.js](https://nodejs.org) Version 22 oder neuer.
 - **KI-Vorschlag aus Text** und **Matching-Vorschläge** im Buchungsstapel.
 - Aktivierung in den Einstellungen; Belegdaten werden nur auf Klick gesendet.
 
+## Zu mehreren arbeiten (Sync per Datei)
+
+Unter **Einstellungen → „Daten sichern & an andere weitergeben"**:
+
+1. Wer fertig ist, klickt **Daten exportieren** → eine Datei `GBR-Immo-Daten-….gbr`.
+2. Diese Datei dem Nächsten geben (E-Mail/USB/Cloud).
+3. Der Nächste klickt **Daten importieren** und arbeitet weiter.
+
+Es arbeitet immer nur eine Person zur Zeit am Stand — dadurch kann nichts kollidieren.
+Die Datei enthält alles (Buchungen, Belege, Dokumente). Beim Import werden die
+aktuellen Daten ersetzt; vorher legt die App automatisch eine Sicherung in
+`daten/backups/` an. Die `.gbr`-Datei eignet sich auch als reine **Sicherung**.
+
+## App aktualisieren (Daten bleiben erhalten)
+
+1. Optional vorher die Daten exportieren (Sicherung).
+2. Neue Version herunterladen und entpacken.
+3. Programmdateien ersetzen — **aber den Ordner `daten/` behalten** (dort liegen alle Eingaben).
+4. Einmal **`update.bat`** ausführen, danach normal mit `start.bat` starten.
+
+Nötige Datenbank-Anpassungen führt die App beim Start automatisch durch. Die
+installierte Version steht unter **Einstellungen → Version & Updates**.
+
 ## Projektstruktur
 
 ```

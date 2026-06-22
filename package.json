@@ -1,6 +1,6 @@
 {
   "name": "gbr-immo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Lokale Verwaltung einer Grundstücks-GbR mit Schwerpunkt Finanzbuchhaltung & USt-Voranmeldung",
   "type": "module",
   "engines": {
