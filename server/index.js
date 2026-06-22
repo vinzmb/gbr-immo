@@ -1,8 +1,10 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { writeFileSync, existsSync, readFileSync, readdirSync, copyFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readFileSync, readdirSync, copyFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { execSync, spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { getDb, Pfade } from './db.js';
 import {
   splitsBerechnen, ustvaBerechnen, periodeGrenzen, vorsteuerquoteFlaeche,
@@ -15,6 +17,7 @@ import { findeTreffer } from './lib/matching.js';
 import { nkBerechnen, monateImZeitraum } from './lib/nebenkosten.js';
 import { parseDatev, ustAusBu } from './lib/datevimport.js';
 import { elsterUStVAXml } from './lib/elster.js';
+import { pruefeUpdate } from './lib/update.js';
 
 const db = getDb();
 const app = Fastify({ logger: false, bodyLimit: 256 * 1024 * 1024 });
@@ -117,7 +120,7 @@ app.get('/api/dokumente/:id/datei', (req, reply) => {
 app.get('/api/mandant', () => mandant());
 app.put('/api/mandant', (req) => {
   const f = ['name', 'steuernummer', 'ust_idnr', 'finanzamt', 'besteuerungsart',
-    'voranmeldungszeitraum', 'kontenrahmen', 'ki_aktiv', 'ki_api_key'];
+    'voranmeldungszeitraum', 'kontenrahmen', 'ki_aktiv', 'ki_api_key', 'update_repo', 'update_token'];
   const genutzt = f.filter((x) => req.body[x] !== undefined && req.body[x] !== null);
   if (genutzt.length) {
     const set = genutzt.map((x) => `${x} = ?`).join(', ');
@@ -683,6 +686,53 @@ function appVersion() {
   }
 }
 app.get('/api/version', () => ({ version: appVersion() }));
+
+// Auf Updates prüfen (GitHub Releases)
+app.get('/api/update/check', async () => {
+  const m = mandant();
+  try {
+    return await pruefeUpdate({ repo: m.update_repo, token: m.update_token, aktuelleVersion: appVersion() });
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
+
+// Update herunterladen, austauschen und App neu starten
+app.post('/api/update/install', async (req) => {
+  const m = mandant();
+  try {
+    const info = await pruefeUpdate({ repo: m.update_repo, token: m.update_token, aktuelleVersion: appVersion() });
+    if (info.error) return info;
+    if (!info.updateVerfuegbar) return { error: 'Es ist bereits die neueste Version installiert.' };
+    if (!info.asset) return { error: 'Im Release ist keine .zip-Datei zum automatischen Installieren hinterlegt.' };
+
+    const headers = { 'User-Agent': 'GBR-Immo-Updater', Accept: 'application/octet-stream' };
+    if (m.update_token) headers.Authorization = `Bearer ${m.update_token}`;
+    const dl = await fetch(info.asset.url, { headers, redirect: 'follow' });
+    if (!dl.ok) return { error: `Download fehlgeschlagen (${dl.status}).` };
+    const buf = Buffer.from(await dl.arrayBuffer());
+
+    const tmp = join(tmpdir(), `gbr-update-${Date.now()}`);
+    mkdirSync(tmp, { recursive: true });
+    const zipPfad = join(tmp, 'update.zip');
+    writeFileSync(zipPfad, buf);
+    const ziel = join(tmp, 'entpackt');
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '${zipPfad}' -DestinationPath '${ziel}' -Force"`);
+
+    // Falls das Zip einen einzelnen Wurzelordner enthält, in diesen wechseln.
+    let quelle = ziel;
+    const eintraege = readdirSync(ziel);
+    if (eintraege.length === 1 && statSync(join(ziel, eintraege[0])).isDirectory()) quelle = join(ziel, eintraege[0]);
+
+    const applyBat = join(Pfade.ROOT, 'update-apply.bat');
+    if (!existsSync(applyBat)) return { error: 'update-apply.bat fehlt im Installationsordner.' };
+    spawn('cmd', ['/c', 'start', '""', applyBat, quelle, Pfade.ROOT], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    setTimeout(() => process.exit(0), 600);
+    return { ok: true, neueste: info.neueste };
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
 
 // Tabellen in FK-sicherer Reihenfolge (Eltern vor Kindern).
 const SYNC_TABELLEN = [

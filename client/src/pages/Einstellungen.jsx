@@ -16,6 +16,31 @@ export default function Einstellungen() {
 
   const datenExportieren = () => window.open('/api/sync/export', '_blank');
 
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateLaedt, setUpdateLaedt] = useState(false);
+
+  const updatePruefen = async () => {
+    setUpdateLaedt(true); setUpdateInfo(null);
+    try {
+      await api.put('/mandant', { update_repo: m.update_repo, update_token: m.update_token });
+      setUpdateInfo(await api.get('/update/check'));
+    } catch (e) { setUpdateInfo({ error: e.message }); }
+    setUpdateLaedt(false);
+  };
+  const updateInstallieren = async () => {
+    if (!confirm('Das Update wird jetzt heruntergeladen und installiert. Die App schließt sich dabei kurz und startet neu. Fortfahren?')) return;
+    setUpdateLaedt(true);
+    try {
+      const r = await api.post('/update/install', {});
+      if (r.error) setUpdateInfo({ ...updateInfo, error: r.error });
+      else setUpdateInfo({ ...updateInfo, installiert: true });
+    } catch (e) {
+      // Verbindungsabbruch ist hier normal (Server startet neu)
+      setUpdateInfo({ ...updateInfo, installiert: true });
+    }
+    setUpdateLaedt(false);
+  };
+
   const datenImportieren = (file) => {
     if (!file) return;
     if (!confirm('Achtung: Beim Import werden alle aktuellen Daten durch den Inhalt der Datei ersetzt. Vorher wird automatisch eine Sicherung angelegt. Fortfahren?')) return;
@@ -129,14 +154,36 @@ export default function Einstellungen() {
       </Card>
 
       <Card title="Version & Updates">
-        <div className="space-y-3">
-          <div className="text-sm text-slate-600">Installierte Version: <strong className="text-slate-800">{version || '…'}</strong></div>
-          <Erklaerung titel="Wie aktualisiere ich die App?">
-            <p><strong>1.</strong> Sichere zur Sicherheit kurz deine Daten (Knopf oben).</p>
-            <p><strong>2.</strong> Lade die neue Version herunter und entpacke sie.</p>
-            <p><strong>3.</strong> Ersetze die Programmdateien – <strong>aber behalte den Ordner <code>daten/</code></strong> (darin liegen alle deine Eingaben).</p>
-            <p><strong>4.</strong> Führe einmal <strong><code>update.bat</code></strong> aus und starte dann wie gewohnt mit <code>start.bat</code>.</p>
-            <p>Deine Daten bleiben dabei erhalten; nötige Anpassungen an der Datenbank macht die App beim Start automatisch.</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-600">Installierte Version: <strong className="text-slate-800">{version || '…'}</strong></div>
+            <Button variant="ghost" onClick={updatePruefen} disabled={updateLaedt}>{updateLaedt ? 'Prüfe …' : '🔄 Nach Updates suchen'}</Button>
+          </div>
+
+          {updateInfo?.error && <Hinweis ton="warn">{updateInfo.error}</Hinweis>}
+          {updateInfo?.installiert && <Hinweis ton="ok">Update wird installiert – die App startet gleich neu. Bitte diese Seite in ein paar Sekunden neu laden.</Hinweis>}
+          {updateInfo && !updateInfo.error && !updateInfo.installiert && (
+            updateInfo.updateVerfuegbar ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2">
+                <div className="font-medium text-emerald-800">Neue Version verfügbar: {updateInfo.neueste} (installiert: {updateInfo.aktuell})</div>
+                {updateInfo.notiz && <div className="text-sm text-emerald-900/80 whitespace-pre-line max-h-32 overflow-y-auto">{updateInfo.notiz}</div>}
+                {updateInfo.asset
+                  ? <Button onClick={updateInstallieren} disabled={updateLaedt}>{updateLaedt ? 'Installiere …' : '⬇️ Jetzt automatisch installieren'}</Button>
+                  : <Hinweis ton="info">Dieses Release hat keine installierbare .zip-Datei. {updateInfo.seite && <a className="underline" href={updateInfo.seite} target="_blank" rel="noreferrer">Zur Download-Seite</a>}</Hinweis>}
+              </div>
+            ) : <Hinweis ton="ok">Du hast bereits die neueste Version ({updateInfo.aktuell}).</Hinweis>
+          )}
+
+          <details className="text-sm">
+            <summary className="cursor-pointer text-slate-500 select-none">Update-Quelle (GitHub) einstellen</summary>
+            <div className="mt-3 grid md:grid-cols-2 gap-3">
+              <Field label="GitHub-Projekt" hint="Format: benutzer/projekt"><Input value={m.update_repo || ''} onChange={(e) => setM({ ...m, update_repo: e.target.value })} placeholder="benutzer/gbr-immo" /></Field>
+              <Field label="Zugangs-Token (nur für private Projekte)"><Input type="password" value={m.update_token || ''} onChange={(e) => setM({ ...m, update_token: e.target.value })} placeholder="ghp_…" /></Field>
+            </div>
+          </details>
+
+          <Erklaerung titel="Update von Hand (falls nötig)">
+            <p>Falls die automatische Installation nicht klappt: neue Version herunterladen, entpacken, Programmdateien ersetzen – <strong>den Ordner <code>daten/</code> behalten</strong> – und einmal <code>update.bat</code> ausführen. Deine Daten bleiben erhalten.</p>
           </Erklaerung>
         </div>
       </Card>

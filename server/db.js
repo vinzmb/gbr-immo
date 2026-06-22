@@ -6,7 +6,9 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const DATEN_DIR = join(ROOT, 'daten');
+// Datenordner: per Umgebungsvariable überschreibbar (Installer legt ihn z.B. nach
+// %APPDATA%\GBR-Immo, damit App-Updates die Daten nie berühren).
+const DATEN_DIR = process.env.GBR_DATA_DIR || join(ROOT, 'daten');
 const BELEGE_DIR = join(DATEN_DIR, 'belege');
 const BACKUP_DIR = join(DATEN_DIR, 'backups');
 const DB_PFAD = join(DATEN_DIR, 'gbr-immo.db');
@@ -63,6 +65,8 @@ function migriere(db) {
   ergaenze('buchungen', 'umlageschluessel', "TEXT NOT NULL DEFAULT ''");
   ergaenze('buchungen', 'import_hash', "TEXT NOT NULL DEFAULT ''");
   ergaenze('buchungen', 'herkunft', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('mandant', 'update_repo', "TEXT NOT NULL DEFAULT 'vinzentweiss/gbr-immo'");
+  ergaenze('mandant', 'update_token', "TEXT NOT NULL DEFAULT ''");
 }
 
 function seed(db) {

@@ -8,3 +8,6 @@ client/dist/
 # Build-/Test-Artefakte
 .playwright-mcp/
 *.png
+installer/_build/
+installer/Output/
+*.gbr
