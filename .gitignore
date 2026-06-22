@@ -6,5 +6,5 @@ client/dist/
 .env
 
 # Build-/Test-Artefakte
-client/.playwright-mcp/
+.playwright-mcp/
 *.png
