@@ -7,6 +7,7 @@ const TABS = [
   { id: 'einheiten', label: 'Mieteinheiten' },
   { id: 'mieter', label: 'Mieter' },
   { id: 'vertraege', label: 'Mietverträge' },
+  { id: 'mieterkonten', label: 'Mieterkonten' },
 ];
 
 const USTLABEL = { '19': '19 % (Option §9)', '7': '7 % (ermäßigt)', frei: 'steuerfrei (§4 Nr.12)' };
@@ -37,6 +38,7 @@ export default function Stammdaten() {
       {tab === 'einheiten' && <Einheiten />}
       {tab === 'mieter' && <Mieter />}
       {tab === 'vertraege' && <Vertraege />}
+      {tab === 'mieterkonten' && <Mieterkonten />}
     </div>
   );
 }
@@ -194,6 +196,9 @@ function Mieter() {
               <Field label="E-Mail"><Input value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
               <Field label="Telefon"><Input value={form.telefon || ''} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></Field>
             </div>
+            <Field label="Personenkonto (Debitor)" info="Eigenes Buchhaltungskonto dieses Mieters für DATEV (Subkontierung). Leer lassen und unter „Mieterkonten“ automatisch vergeben – oder die bestehende Nummer deiner Vorgängerin eintragen.">
+              <Input value={form.debitor_konto || ''} onChange={(e) => setForm({ ...form, debitor_konto: e.target.value })} placeholder="z. B. 10001" />
+            </Field>
             <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" onClick={() => setForm(null)}>Abbrechen</Button><Button onClick={speichern}>Speichern</Button></div>
           </div>
         )}
@@ -203,6 +208,67 @@ function Mieter() {
 }
 
 // ---------- Verträge ----------
+// ---------- Mieterkonten (Personenkonten / offene Posten) ----------
+function Mieterkonten() {
+  const [jahr, setJahr] = useState(new Date().getFullYear());
+  const [daten, setDaten] = useState(null);
+  const [meldung, setMeldung] = useState('');
+
+  const laden = () => api.get(`/mieterkonten?jahr=${jahr}`).then(setDaten);
+  useEffect(() => { laden(); }, [jahr]);
+
+  const vergeben = async () => {
+    const r = await api.post('/mieterkonten/vergeben', {});
+    setMeldung(`${r.vergeben} Personenkonto/-konten vergeben.`);
+    laden();
+    setTimeout(() => setMeldung(''), 3000);
+  };
+
+  const jahre = []; { const j = new Date().getFullYear(); for (let i = 0; i < 5; i++) jahre.push(j - i); }
+
+  return (
+    <div className="space-y-4">
+      <Erklaerung titel="Was sind Mieterkonten?">
+        <p>Jeder Mieter bekommt ein eigenes <strong>Personenkonto (Debitor)</strong> – so wie es deine Vorgängerin in DATEV geführt hat. Darüber siehst du je Mieter:</p>
+        <p><strong>Soll</strong> = was der Mieter laut Vertrag im Jahr zahlen müsste (Miete + Nebenkosten, brutto). <strong>Ist</strong> = was tatsächlich eingegangen ist. <strong>Offen</strong> = die Differenz (was noch aussteht).</p>
+        <p>Die Personenkonten erscheinen auch im DATEV-Export als Gegenkonto der Mieteinnahmen.</p>
+      </Erklaerung>
+
+      <Card title="Mieterkonten – Soll / Ist / Offen"
+        actions={
+          <div className="flex items-center gap-2">
+            <select value={jahr} onChange={(e) => setJahr(Number(e.target.value))} className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+              {jahre.map((j) => <option key={j} value={j}>{j}</option>)}
+            </select>
+            <Button variant="ghost" onClick={vergeben}>Personenkonten automatisch vergeben</Button>
+          </div>
+        }>
+        {meldung && <div className="mb-3"><Hinweis ton="ok">{meldung}</Hinweis></div>}
+        {daten && (
+          <Table
+            columns={[
+              { kopf: 'Mieter', zelle: (r) => <span className="font-medium text-slate-800">{r.name}</span> },
+              { kopf: 'Personenkonto', zelle: (r) => r.debitor_konto || <Badge color="amber">fehlt</Badge> },
+              { kopf: 'Soll (Vertrag)', align: 'right', zelle: (r) => fmtEuro(r.soll) },
+              { kopf: 'Ist (eingegangen)', align: 'right', zelle: (r) => fmtEuro(r.ist) },
+              { kopf: 'Offen', align: 'right', zelle: (r) => <span className={r.offen > 0 ? 'text-red-600 font-medium' : r.offen < 0 ? 'text-emerald-600' : ''}>{fmtEuro(r.offen)}</span> },
+            ]}
+            rows={daten.zeilen}
+            leer="Noch keine Mieter angelegt."
+          />
+        )}
+        {daten && daten.zeilen.length > 0 && (
+          <div className="flex justify-end gap-8 mt-3 pt-3 border-t border-slate-100 text-sm">
+            <span className="text-slate-500">Summe Soll: <strong className="text-slate-800">{fmtEuro(daten.summe.soll)}</strong></span>
+            <span className="text-slate-500">Ist: <strong className="text-slate-800">{fmtEuro(daten.summe.ist)}</strong></span>
+            <span className="text-slate-500">Offen: <strong className={daten.summe.offen > 0 ? 'text-red-600' : 'text-slate-800'}>{fmtEuro(daten.summe.offen)}</strong></span>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function Vertraege() {
   const [einheiten] = useListe('/einheiten');
   const [mieter] = useListe('/mieter');

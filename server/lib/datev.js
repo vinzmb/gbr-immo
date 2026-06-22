@@ -49,7 +49,8 @@ export function datevBuchungsstapel(buchungen, mandant, zeitraum) {
     .map((b) => {
       const istEinnahme = b.typ === 'einnahme';
       const sachkonto = b.konto;        // Erlös- bzw. Aufwandskonto
-      const gegenkonto = b.gegenkonto || '1800'; // Bank
+      // Bei Mieteinnahmen über das Personenkonto (Debitor) des Mieters buchen.
+      const gegenkonto = (istEinnahme && b.debitor_konto) ? b.debitor_konto : (b.gegenkonto || '1800');
       const sh = istEinnahme ? 'H' : 'S';
       const bu = istEinnahme ? BU_UMSATZSTEUER[b.ust_satz] : BU_VORSTEUER[b.ust_satz];
       const [, mm, dd] = b.datum.split('-'); // YYYY-MM-DD

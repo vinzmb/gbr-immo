@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS mieter (
   ansprechpartner TEXT NOT NULL DEFAULT '',
   email       TEXT    NOT NULL DEFAULT '',
   telefon     TEXT    NOT NULL DEFAULT '',
+  debitor_konto TEXT  NOT NULL DEFAULT '',  -- Personenkonto (Subkontierung, DATEV)
   notiz       TEXT    NOT NULL DEFAULT '',
   erstellt_am TEXT    NOT NULL DEFAULT (datetime('now'))
 );

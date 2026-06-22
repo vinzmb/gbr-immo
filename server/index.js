@@ -85,7 +85,7 @@ function crud(tabelle, felder) {
 
 crud('objekte', ['name', 'strasse', 'plz', 'ort', 'gesamtflaeche', 'notiz']);
 crud('einheiten', ['objekt_id', 'bezeichnung', 'flaeche', 'nutzungsart', 'ust_status', 'miteigentumsanteil', 'notiz']);
-crud('mieter', ['name', 'ansprechpartner', 'email', 'telefon', 'notiz']);
+crud('mieter', ['name', 'ansprechpartner', 'email', 'telefon', 'debitor_konto', 'notiz']);
 crud('mietvertraege', ['einheit_id', 'mieter_id', 'nettomiete', 'ust_satz', 'beginn', 'ende', 'kaution', 'nk_vorauszahlung', 'aktiv']);
 crud('bank_konten', ['name', 'iban']);
 crud('berichtigungsobjekte', ['bezeichnung', 'objekt_id', 'vorsteuer_gesamt', 'quote_urspruenglich', 'beginn', 'jahre', 'notiz']);
@@ -255,13 +255,23 @@ function buchungSpeichern(body) {
 
   const periode = periodeFuerDatum(body.datum, m.voranmeldungszeitraum);
   const kontoFinal = body.konto || standardKonto(body.typ, body.ust_satz);
+  // Mieterbezug: explizit übergeben oder bei Einnahmen aus dem gültigen Mietvertrag ableiten.
+  let mieterId = body.mieter_id || null;
+  if (!mieterId && body.typ === 'einnahme' && buchung.einheit_id) {
+    const v = one(
+      `SELECT mieter_id FROM mietvertraege WHERE einheit_id = ?
+         AND (beginn = '' OR beginn <= ?) AND (ende = '' OR ende >= ?) ORDER BY beginn DESC LIMIT 1`,
+      buchung.einheit_id, body.datum, body.datum
+    );
+    if (v) mieterId = v.mieter_id;
+  }
   const r = run(
-    `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, periode, import_hash, herkunft)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, mieter_id, periode, import_hash, herkunft)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     body.datum, body.beleg_id || null, body.typ, kontoFinal, body.gegenkonto || bankKonto(),
     body.betrag_brutto, body.ust_satz, ust_betrag, vorsteuer_abziehbar,
     body.steuerschluessel || '', body.buchungstext || '', buchung.aufteilung_modus,
-    buchung.einheit_id, periode, body.import_hash || '', body.herkunft || ''
+    buchung.einheit_id, mieterId, periode, body.import_hash || '', body.herkunft || ''
   );
   const id = r.lastInsertRowid;
   for (const s of splits) {
@@ -420,6 +430,9 @@ app.get('/api/export/datev', (req, reply) => {
     'SELECT * FROM buchungen WHERE datum >= ? AND datum <= ? AND storniert = 0 ORDER BY datum',
     von, bis
   );
+  // Personenkonto (Debitor) je Mieter für die Subkontierung anhängen.
+  const debitorById = new Map(all("SELECT id, debitor_konto FROM mieter WHERE debitor_konto != ''").map((m) => [m.id, m.debitor_konto]));
+  for (const b of buchungen) if (b.mieter_id && debitorById.has(b.mieter_id)) b.debitor_konto = debitorById.get(b.mieter_id);
   const csv = datevBuchungsstapel(buchungen, mandant(), { von, bis });
   reply.header('content-type', 'text/csv; charset=utf-8');
   reply.header('content-disposition', `attachment; filename="DATEV_${periode}.csv"`);
@@ -666,6 +679,54 @@ app.get('/api/vst15a/jahr', (req) => {
     zeilen.push({ id: o.id, bezeichnung: o.bezeichnung, qn, q0: o.quote_urspruenglich, ...b });
   }
   const summe = zeilen.reduce((a, z) => a + (z.anzuwenden ? z.betrag : 0), 0);
+  return { jahr, zeilen, summe };
+});
+
+// ---------- Mieterkonten (Personenkonten / Subkontierung) ----------
+// Freie Personenkonto-Nummern automatisch vergeben (fortlaufend ab 10000).
+app.post('/api/mieterkonten/vergeben', () => {
+  let max = 9999;
+  for (const m of all("SELECT debitor_konto FROM mieter WHERE debitor_konto != ''")) {
+    const n = parseInt(m.debitor_konto, 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  let vergeben = 0;
+  for (const m of all("SELECT id FROM mieter WHERE debitor_konto = '' ORDER BY id")) {
+    max += 1;
+    run('UPDATE mieter SET debitor_konto = ? WHERE id = ?', String(max), m.id);
+    vergeben++;
+  }
+  return { vergeben };
+});
+
+function monateAktivImJahr(v, jahr) {
+  let n = 0;
+  for (let mo = 1; mo <= 12; mo++) {
+    const mm = String(mo).padStart(2, '0');
+    const start = `${jahr}-${mm}-01`;
+    const ende = `${jahr}-${mm}-28`;
+    if ((!v.beginn || v.beginn <= ende) && (!v.ende || v.ende >= start)) n++;
+  }
+  return n;
+}
+
+// Soll (laut Vertrag) / Ist (tatsächlich eingegangen) / offen je Mieter.
+app.get('/api/mieterkonten', (req) => {
+  const jahr = Number(req.query.jahr) || new Date().getFullYear();
+  const vertraege = all('SELECT * FROM mietvertraege');
+  const zeilen = all('SELECT * FROM mieter ORDER BY name').map((mi) => {
+    let soll = 0;
+    for (const v of vertraege.filter((x) => x.mieter_id === mi.id)) {
+      const monate = monateAktivImJahr(v, jahr);
+      soll += (bruttoAusNetto(v.nettomiete, v.ust_satz) + bruttoAusNetto(v.nk_vorauszahlung || 0, v.ust_satz)) * monate;
+    }
+    const ist = one(
+      "SELECT COALESCE(SUM(betrag_brutto),0) AS s FROM buchungen WHERE typ='einnahme' AND storniert=0 AND mieter_id=? AND datum>=? AND datum<=?",
+      mi.id, `${jahr}-01-01`, `${jahr}-12-31`
+    ).s;
+    return { id: mi.id, name: mi.name, debitor_konto: mi.debitor_konto, soll, ist, offen: soll - ist };
+  });
+  const summe = zeilen.reduce((a, z) => ({ soll: a.soll + z.soll, ist: a.ist + z.ist, offen: a.offen + z.offen }), { soll: 0, ist: 0, offen: 0 });
   return { jahr, zeilen, summe };
 });
 
