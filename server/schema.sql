@@ -201,6 +201,19 @@ CREATE TABLE IF NOT EXISTS nk_abrechnungen (
   erstellt_am TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Berichtigungsobjekte für die Vorsteuerberichtigung nach §15a UStG
+CREATE TABLE IF NOT EXISTS berichtigungsobjekte (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  bezeichnung         TEXT    NOT NULL,
+  objekt_id           INTEGER REFERENCES objekte(id) ON DELETE SET NULL,
+  vorsteuer_gesamt    INTEGER NOT NULL DEFAULT 0,  -- gesamte Vorsteuer auf das WG (Cent)
+  quote_urspruenglich REAL    NOT NULL DEFAULT 0,  -- ursprüngliche Abzugsquote q0 (0..1)
+  beginn              TEXT    NOT NULL DEFAULT '',  -- erstmalige Verwendung (YYYY-MM-DD)
+  jahre               INTEGER NOT NULL DEFAULT 10,  -- Berichtigungszeitraum (10 Gebäude / 5 bewegl.)
+  notiz               TEXT    NOT NULL DEFAULT '',
+  erstellt_am         TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Dokumentenarchiv (Verträge, Grundbuch, Versicherungen ...)
 CREATE TABLE IF NOT EXISTS dokumente (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

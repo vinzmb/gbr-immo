@@ -18,6 +18,7 @@ import { nkBerechnen, monateImZeitraum } from './lib/nebenkosten.js';
 import { parseDatev, ustAusBu } from './lib/datevimport.js';
 import { elsterUStVAXml } from './lib/elster.js';
 import { pruefeUpdate } from './lib/update.js';
+import { berichtigungEinJahr, jahreImZeitraum } from './lib/vorsteuer15a.js';
 
 const db = getDb();
 const app = Fastify({ logger: false, bodyLimit: 256 * 1024 * 1024 });
@@ -87,6 +88,7 @@ crud('einheiten', ['objekt_id', 'bezeichnung', 'flaeche', 'nutzungsart', 'ust_st
 crud('mieter', ['name', 'ansprechpartner', 'email', 'telefon', 'notiz']);
 crud('mietvertraege', ['einheit_id', 'mieter_id', 'nettomiete', 'ust_satz', 'beginn', 'ende', 'kaution', 'nk_vorauszahlung', 'aktiv']);
 crud('bank_konten', ['name', 'iban']);
+crud('berichtigungsobjekte', ['bezeichnung', 'objekt_id', 'vorsteuer_gesamt', 'quote_urspruenglich', 'beginn', 'jahre', 'notiz']);
 // Dokumente: Liste/Löschen via crud-Stil, Anlegen mit optionalem Datei-Upload.
 app.get('/api/dokumente', () => all('SELECT * FROM dokumente ORDER BY id DESC'));
 app.delete('/api/dokumente/:id', (req) => { run('DELETE FROM dokumente WHERE id = ?', Number(req.params.id)); return { ok: true }; });
@@ -613,6 +615,39 @@ app.get('/api/nk/abrechnungen/:id/druck', (req, reply) => {
   return reply.send(druckHtml(a, daten, objekt, m));
 });
 
+// ---------- Vorsteuerberichtigung §15a ----------
+// Tatsächliche Abzugsquote eines Objekts in einem Jahr (Flächenstatus zum Jahresende).
+function quoteFuerObjektImJahr(objektId, jahr) {
+  const einheiten = einheitenMitGewicht(objektId, `${jahr}-12-31`);
+  return vorsteuerquoteFlaeche(einheiten);
+}
+
+// Voller Berichtigungsplan eines Objekts über den Zeitraum.
+app.get('/api/vst15a/plan/:id', (req) => {
+  const o = one('SELECT * FROM berichtigungsobjekte WHERE id = ?', Number(req.params.id));
+  if (!o) return { error: 'nicht gefunden' };
+  const zeilen = jahreImZeitraum(o.beginn, o.jahre).map((jahr) => {
+    const qn = o.objekt_id ? quoteFuerObjektImJahr(o.objekt_id, jahr) : o.quote_urspruenglich;
+    return { jahr, qn, ...berichtigungEinJahr(o, qn) };
+  });
+  const summe = zeilen.reduce((a, z) => a + (z.anzuwenden ? z.betrag : 0), 0);
+  return { objekt: o, zeilen, summe };
+});
+
+// Berichtigungsbeträge aller Objekte für ein bestimmtes Jahr.
+app.get('/api/vst15a/jahr', (req) => {
+  const jahr = Number(req.query.jahr);
+  const zeilen = [];
+  for (const o of all('SELECT * FROM berichtigungsobjekte ORDER BY id')) {
+    if (!jahreImZeitraum(o.beginn, o.jahre).includes(jahr)) continue;
+    const qn = o.objekt_id ? quoteFuerObjektImJahr(o.objekt_id, jahr) : o.quote_urspruenglich;
+    const b = berichtigungEinJahr(o, qn);
+    zeilen.push({ id: o.id, bezeichnung: o.bezeichnung, qn, q0: o.quote_urspruenglich, ...b });
+  }
+  const summe = zeilen.reduce((a, z) => a + (z.anzuwenden ? z.betrag : 0), 0);
+  return { jahr, zeilen, summe };
+});
+
 // ---------- Dashboard ----------
 app.get('/api/dashboard', () => {
   const m = mandant();
@@ -760,7 +795,7 @@ app.post('/api/update/install', async (req) => {
 const SYNC_TABELLEN = [
   'mandant', 'konten', 'objekte', 'mieter', 'einheiten', 'mietvertraege',
   'bank_konten', 'belege', 'buchungen', 'buchung_splits', 'bank_umsaetze',
-  'ustva_meldungen', 'dokumente', 'nk_verbrauch', 'nk_abrechnungen',
+  'ustva_meldungen', 'dokumente', 'nk_verbrauch', 'nk_abrechnungen', 'berichtigungsobjekte',
 ];
 
 // Kompletten Datenstand als eine Datei exportieren (Sicherung / Weitergabe).
