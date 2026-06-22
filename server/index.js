@@ -133,7 +133,7 @@ app.put('/api/mandant', (req) => {
 app.get('/api/konten', () => all('SELECT * FROM konten WHERE rahmen = ? ORDER BY nummer', mandant().kontenrahmen));
 
 // ---------- Einheiten mit Umsatzgewicht (für Aufteilung) ----------
-function einheitenMitGewicht(objektId) {
+function einheitenMitGewicht(objektId, datum) {
   const rows = objektId
     ? all('SELECT * FROM einheiten WHERE objekt_id = ?', objektId)
     : all('SELECT * FROM einheiten');
@@ -143,14 +143,36 @@ function einheitenMitGewicht(objektId) {
       e.id
     );
     e.umsatz_gewicht = v.s;
+    // USt-Status zeitabhängig: maßgeblich ist der zum Datum gültige Mietvertrag.
+    if (datum) e.ust_status = ustStatusAmDatum(e.id, datum, e.ust_status);
   }
   return rows;
 }
 
-// Einheiten-Liste passend zum Aufteilungsmodus (inkl. manueller Gewichte).
+/**
+ * USt-Status einer Einheit zu einem bestimmten Datum.
+ * Entscheidend für den Vorsteuerabzug ist, ob die Einheit am Datum steuerpflichtig
+ * (mit Option, 19/7) oder steuerfrei vermietet ist. Maßgeblich ist der an diesem
+ * Tag gültige Mietvertrag; bei Leerstand gilt die hinterlegte Standardnutzung der Einheit.
+ */
+function ustStatusAmDatum(einheitId, datum, fallback) {
+  const v = one(
+    `SELECT ust_satz FROM mietvertraege
+       WHERE einheit_id = ?
+         AND (beginn = '' OR beginn <= ?)
+         AND (ende = '' OR ende >= ?)
+       ORDER BY beginn DESC LIMIT 1`,
+    einheitId, datum, datum
+  );
+  return v ? v.ust_satz : fallback;
+}
+
+// Einheiten-Liste passend zum Aufteilungsmodus (inkl. manueller Gewichte),
+// mit zeitabhängigem USt-Status zum Buchungsdatum.
 function einheitenFuerBuchung(body) {
+  const datum = body.datum || null;
   if (body.aufteilung_modus === 'manuell' && Array.isArray(body.manuelle_splits)) {
-    const alle = einheitenMitGewicht(null);
+    const alle = einheitenMitGewicht(null, datum);
     return body.manuelle_splits
       .map((ms) => {
         const e = alle.find((x) => x.id === Number(ms.einheit_id));
@@ -158,7 +180,7 @@ function einheitenFuerBuchung(body) {
       })
       .filter(Boolean);
   }
-  return einheitenMitGewicht(body.objekt_id || null);
+  return einheitenMitGewicht(body.objekt_id || null, datum);
 }
 
 // ---------- Belege ----------
@@ -604,7 +626,7 @@ app.get('/api/dashboard', () => {
     belege_offen: one("SELECT COUNT(*) n FROM belege WHERE status = 'offen'").n,
     bank_offen: one("SELECT COUNT(*) n FROM bank_umsaetze WHERE status = 'offen'").n,
     buchungen: one('SELECT COUNT(*) n FROM buchungen WHERE storniert = 0').n,
-    quote: vorsteuerquoteFlaeche(all('SELECT * FROM einheiten')),
+    quote: vorsteuerquoteFlaeche(einheitenMitGewicht(null, new Date().toISOString().slice(0, 10))),
     aktuelleUstva,
     mandant: m,
   };

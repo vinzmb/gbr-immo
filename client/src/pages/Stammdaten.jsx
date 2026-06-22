@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, euroZuCent } from '../api.js';
-import { Card, Button, Table, Modal, Field, Input, Select, Textarea, Badge, Hinweis } from '../ui.jsx';
+import { Card, Button, Table, Modal, Field, Input, Select, Textarea, Badge, Hinweis, Erklaerung } from '../ui.jsx';
 
 const TABS = [
   { id: 'objekte', label: 'Objekte' },
@@ -144,7 +144,7 @@ function Einheiten() {
                 </Select>
               </Field>
             </div>
-            <Field label="Vermietest du mit oder ohne Umsatzsteuer?" info="Vermietest du an ein Gewerbe mit Umsatzsteuer (z. B. Laden), wähle 19 %. Vermietest du ohne (z. B. Wohnung, Arztpraxis), wähle „ohne“. Das entscheidet, ob du Vorsteuer aus Kosten dieser Einheit zurückbekommst.">
+            <Field label="Vermietest du mit oder ohne Umsatzsteuer?" info="Standard-/geplante Nutzung dieser Einheit (z. B. bei Leerstand). Sobald ein Mietvertrag hinterlegt ist, richtet sich der Vorsteuerabzug automatisch nach dem zum jeweiligen Datum gültigen Vertrag – wichtig bei Mieterwechsel.">
               <Select value={form.ust_status} onChange={(e) => setForm({ ...form, ust_status: e.target.value })}>
                 <option value="19">mit 19 % Umsatzsteuer (z. B. Gewerbe/Laden)</option>
                 <option value="7">mit 7 % Umsatzsteuer (ermäßigt)</option>
@@ -228,6 +228,11 @@ function Vertraege() {
   return (
     <div className="space-y-4">
       {!bereit && <Hinweis ton="warn">Lege zuerst Einheiten und Mieter an, um Verträge zu erfassen.</Hinweis>}
+      <Erklaerung titel="Mieterwechsel & Vorsteuerabzug">
+        <p>Trage bei einem <strong>Mieterwechsel</strong> einfach beim alten Vertrag das <strong>Ende-Datum</strong> ein und lege einen <strong>neuen Vertrag</strong> ab dem Folgetag an – mit dem USt-Satz des neuen Mieters (mit oder ohne Umsatzsteuer).</p>
+        <p>Die App rechnet dann automatisch richtig: Kosten vor dem Wechsel nutzen den alten, danach den neuen Status. Der Vorsteuerabzug folgt also stets dem tatsächlichen Mietverhältnis.</p>
+        <p><strong>Wichtig:</strong> Ändert sich dadurch die Vorsteuerabzugs­berechtigung (z. B. von steuerpflichtig zu steuerfrei), kann eine <strong>Vorsteuerberichtigung nach §15a UStG</strong> für die Gebäude-Vorsteuer fällig werden (10-Jahres-Zeitraum). Sprich das mit deinem Steuerberater ab.</p>
+      </Erklaerung>
       <Card title="Mietverträge" subtitle="Verknüpft Einheit, Mieter und Nettomiete"
         actions={<Button disabled={!bereit} onClick={() => setForm({ einheit_id: einheiten[0]?.id, mieter_id: mieter[0]?.id, nettomiete_euro: '', ust_satz: '19', kaution_euro: '', nk_vorauszahlung_euro: '' })}>+ Vertrag</Button>}>
         <Table

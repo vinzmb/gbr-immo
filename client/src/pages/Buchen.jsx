@@ -54,13 +54,13 @@ export default function Buchen() {
     const cent = euroZuCent(form.betrag_euro);
     if (!cent) { setVorschau(null); return; }
     const body = {
-      typ: form.typ, betrag_brutto: cent, ust_satz: form.ust_satz,
+      typ: form.typ, datum: form.datum, betrag_brutto: cent, ust_satz: form.ust_satz,
       aufteilung_modus: form.aufteilung_modus, objekt_id: form.objekt_id ? Number(form.objekt_id) : null,
       einheit_id: form.einheit_id ? Number(form.einheit_id) : null,
       manuelle_splits: form.aufteilung_modus === 'manuell' ? manuelleSplits() : null,
     };
     api.post('/buchungen/vorschau', body).then(setVorschau).catch(() => setVorschau(null));
-  }, [form.betrag_euro, form.ust_satz, form.aufteilung_modus, form.objekt_id, form.einheit_id, form.typ, JSON.stringify(form.manuell)]);
+  }, [form.betrag_euro, form.ust_satz, form.aufteilung_modus, form.objekt_id, form.einheit_id, form.typ, form.datum, JSON.stringify(form.manuell)]);
 
   const einheitenGefiltert = form.objekt_id ? einheiten.filter((e) => e.objekt_id === Number(form.objekt_id)) : einheiten;
   const kontenGefiltert = konten.filter((k) => (form.typ === 'einnahme' ? k.art === 'erloes' : k.art === 'aufwand'));

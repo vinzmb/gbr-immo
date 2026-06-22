@@ -27,6 +27,8 @@ const THEMEN = [
       ['Warum aufteilen?', 'Wenn dein Gebäude teils mit Umsatzsteuer (z. B. an einen Laden) und teils ohne (z. B. an eine Arztpraxis) vermietet ist, darfst du die Vorsteuer aus allgemeinen Kosten nur anteilig abziehen.'],
       ['Vorsteuerquote', 'Der Anteil der Fläche, der mit Umsatzsteuer vermietet ist. Beispiel: 120 m² von 200 m² → 60 %. Dann sind 60 % der Vorsteuer aus gemeinsamen Kosten abziehbar.'],
       ['Aufteilungsschlüssel', 'Die Regel, nach der Kosten verteilt werden: meist nach Fläche. Bei einer Rechnung, die nur eine Einheit betrifft, wählst du „direkt". Betrifft sie mehrere Mieter, kannst du „manuell" eigene Anteile vergeben.'],
+      ['Mieterwechsel', 'Wechselt der Mieter einer Einheit, trägst du beim alten Vertrag ein Ende-Datum ein und legst einen neuen Vertrag an. Die App bestimmt die Vorsteuerabzugsberechtigung automatisch nach dem zum Buchungsdatum gültigen Vertrag – Kosten vor und nach dem Wechsel werden korrekt unterschiedlich behandelt.'],
+      ['Vorsteuerberichtigung (§15a UStG)', 'Hast du beim Kauf/Bau oder bei großen Maßnahmen Vorsteuer gezogen und ändert sich danach innerhalb von 10 Jahren die Nutzung (z. B. von steuerpflichtiger zu steuerfreier Vermietung wegen Mieterwechsel), musst du einen Teil der Vorsteuer anteilig zurückzahlen – oder bekommst mehr. Das betrifft die Gebäude-Vorsteuer und ist mit dem Steuerberater abzustimmen.'],
     ],
   },
   {
