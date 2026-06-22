@@ -50,9 +50,9 @@ export default function Einstellungen() {
               <option value="jahr">jährlich</option>
             </Select>
           </Field>
-          <Field label="Kontenrahmen" info="Ein Nummernsystem für Buchhaltungskonten. Musst du nicht verstehen – die App nutzt es automatisch im Hintergrund. SKR 04 ist Standard.">
+          <Field label="Kontenrahmen" hint="Wirkt sich auf neue Buchungen aus; frag im Zweifel deinen Steuerberater, welchen er nutzt." info="Ein Nummernsystem für Buchhaltungskonten. Musst du nicht verstehen – die App wählt die Konten automatisch. Viele Steuerberater nutzen SKR 03, andere SKR 04.">
             <Select value={m.kontenrahmen} onChange={(e) => setM({ ...m, kontenrahmen: e.target.value })}>
-              <option value="skr04">SKR 04 (Standard)</option>
+              <option value="skr04">SKR 04</option>
               <option value="skr03">SKR 03</option>
             </Select>
           </Field>

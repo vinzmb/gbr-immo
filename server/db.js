@@ -71,14 +71,16 @@ function seed(db) {
   if (m.n === 0) {
     db.prepare('INSERT INTO mandant (id, name) VALUES (1, ?)').run('Meine Grundstücks-GbR');
   }
-  // SKR04-Standardkonten (Auswahl für Vermietung)
-  const k = db.prepare('SELECT COUNT(*) AS n FROM konten').get();
-  if (k.n === 0) {
-    const insert = db.prepare(
-      'INSERT INTO konten (nummer, bezeichnung, art, ust_satz, rahmen) VALUES (?, ?, ?, ?, ?)'
-    );
-    for (const row of SKR04_KONTEN) insert.run(row[0], row[1], row[2], row[3], 'skr04');
-  }
+  // Standardkonten je Kontenrahmen (idempotent pro Rahmen, auch für bestehende DBs).
+  seedKonten(db, 'skr04', SKR04_KONTEN);
+  seedKonten(db, 'skr03', SKR03_KONTEN);
+}
+
+function seedKonten(db, rahmen, rows) {
+  const n = db.prepare('SELECT COUNT(*) AS n FROM konten WHERE rahmen = ?').get(rahmen).n;
+  if (n > 0) return;
+  const insert = db.prepare('INSERT INTO konten (nummer, bezeichnung, art, ust_satz, rahmen) VALUES (?, ?, ?, ?, ?)');
+  for (const row of rows) insert.run(row[0], row[1], row[2], row[3], rahmen);
 }
 
 // Auswahl gängiger SKR04-Konten für eine vermietende GbR
@@ -106,4 +108,32 @@ const SKR04_KONTEN = [
   ['1571', 'Abziehbare Vorsteuer 7%', 'bestand', ''],
   ['3806', 'Umsatzsteuer 19%', 'bestand', ''],
   ['3801', 'Umsatzsteuer 7%', 'bestand', ''],
+];
+
+// Auswahl gängiger SKR03-Konten für eine vermietende GbR
+// (Standardvorschläge — bitte mit dem Steuerberater abstimmen)
+const SKR03_KONTEN = [
+  // Erlöse
+  ['8110', 'Grundstückserträge (Vermietung) 19% USt', 'erloes', '19'],
+  ['8112', 'Grundstückserträge (Vermietung) 7% USt', 'erloes', '7'],
+  ['8120', 'Grundstückserträge (Vermietung) steuerfrei §4 Nr.12', 'erloes', 'frei'],
+  ['8125', 'Umlagen / Nebenkosten 19% USt', 'erloes', '19'],
+  ['8128', 'Umlagen / Nebenkosten steuerfrei', 'erloes', 'frei'],
+  // Aufwendungen Grundstück
+  ['4210', 'Grundstücksaufwendungen (allgemein)', 'aufwand', '19'],
+  ['4260', 'Instandhaltung Gebäude', 'aufwand', '19'],
+  ['4240', 'Heizung / Energie', 'aufwand', '19'],
+  ['4230', 'Wasser / Abwasser', 'aufwand', '7'],
+  ['4360', 'Versicherungen Gebäude', 'aufwand', 'frei'],
+  ['4320', 'Grundsteuer', 'aufwand', 'frei'],
+  ['4900', 'Verwaltungskosten / Hausverwaltung', 'aufwand', '19'],
+  ['4290', 'Sonstige Grundstücksaufwendungen', 'aufwand', '19'],
+  ['4830', 'Abschreibungen Gebäude (AfA)', 'aufwand', 'frei'],
+  // Geld / Bestand
+  ['1200', 'Bank', 'geld', ''],
+  ['1000', 'Kasse', 'geld', ''],
+  ['1576', 'Abziehbare Vorsteuer 19%', 'bestand', ''],
+  ['1571', 'Abziehbare Vorsteuer 7%', 'bestand', ''],
+  ['1776', 'Umsatzsteuer 19%', 'bestand', ''],
+  ['1771', 'Umsatzsteuer 7%', 'bestand', ''],
 ];

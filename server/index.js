@@ -28,13 +28,19 @@ function mandant() {
   return one('SELECT * FROM mandant WHERE id = 1');
 }
 
-// Automatische Kontoauswahl, falls der Nutzer kein Konto angibt (laienfreundlich).
-const STANDARD_KONTO = {
-  einnahme: { '19': '4860', '7': '4861', frei: '4862' },
-  ausgabe: { '19': '6300', '7': '6330', frei: '6340' },
-};
+// Bankkonto (Gegenkonto) je Kontenrahmen.
+function bankKonto() {
+  return mandant().kontenrahmen === 'skr03' ? '1200' : '1800';
+}
+
+// Automatische Kontoauswahl aus dem aktiven Kontenrahmen (laienfreundlich,
+// funktioniert für SKR04 und SKR03 sowie eigene Anpassungen).
 function standardKonto(typ, ust) {
-  return (STANDARD_KONTO[typ] && STANDARD_KONTO[typ][ust]) || (typ === 'einnahme' ? '4860' : '6300');
+  const rahmen = mandant().kontenrahmen;
+  const art = typ === 'einnahme' ? 'erloes' : 'aufwand';
+  const k = one('SELECT nummer FROM konten WHERE rahmen = ? AND art = ? AND ust_satz = ? ORDER BY nummer LIMIT 1', rahmen, art, ust)
+    || one('SELECT nummer FROM konten WHERE rahmen = ? AND art = ? ORDER BY nummer LIMIT 1', rahmen, art);
+  return k ? k.nummer : (typ === 'einnahme' ? '8120' : '4210');
 }
 
 function periodeFuerDatum(datum, zeitraum) {
@@ -112,13 +118,16 @@ app.get('/api/mandant', () => mandant());
 app.put('/api/mandant', (req) => {
   const f = ['name', 'steuernummer', 'ust_idnr', 'finanzamt', 'besteuerungsart',
     'voranmeldungszeitraum', 'kontenrahmen', 'ki_aktiv', 'ki_api_key'];
-  const set = f.map((x) => `${x} = ?`).join(', ');
-  run(`UPDATE mandant SET ${set} WHERE id = 1`, ...f.map((x) => req.body[x] ?? null));
+  const genutzt = f.filter((x) => req.body[x] !== undefined && req.body[x] !== null);
+  if (genutzt.length) {
+    const set = genutzt.map((x) => `${x} = ?`).join(', ');
+    run(`UPDATE mandant SET ${set} WHERE id = 1`, ...genutzt.map((x) => req.body[x]));
+  }
   return mandant();
 });
 
 // ---------- Konten ----------
-app.get('/api/konten', () => all('SELECT * FROM konten ORDER BY nummer'));
+app.get('/api/konten', () => all('SELECT * FROM konten WHERE rahmen = ? ORDER BY nummer', mandant().kontenrahmen));
 
 // ---------- Einheiten mit Umsatzgewicht (für Aufteilung) ----------
 function einheitenMitGewicht(objektId) {
@@ -222,7 +231,7 @@ function buchungSpeichern(body) {
   const r = run(
     `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, periode, import_hash, herkunft)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    body.datum, body.beleg_id || null, body.typ, kontoFinal, body.gegenkonto || '1800',
+    body.datum, body.beleg_id || null, body.typ, kontoFinal, body.gegenkonto || bankKonto(),
     body.betrag_brutto, body.ust_satz, ust_betrag, vorsteuer_abziehbar,
     body.steuerschluessel || '', body.buchungstext || '', buchung.aufteilung_modus,
     buchung.einheit_id, periode, body.import_hash || '', body.herkunft || ''
@@ -319,7 +328,7 @@ app.post('/api/bank/umsaetze/:id/verbuchen', (req) => {
   const buchung = buchungSpeichern({
     datum: u.datum, typ, betrag_brutto: Math.abs(u.betrag),
     ust_satz: req.body.ust_satz || '19', konto: req.body.konto || '',
-    gegenkonto: '1800', aufteilung_modus: req.body.aufteilung_modus,
+    gegenkonto: bankKonto(), aufteilung_modus: req.body.aufteilung_modus,
     einheit_id: req.body.einheit_id || null, objekt_id: req.body.objekt_id || null,
     manuelle_splits: req.body.manuelle_splits || null,
     beleg_id: req.body.beleg_id || null,
@@ -388,7 +397,7 @@ app.post('/api/import/datev', (req) => {
     const ust = ustAusBu(z.bu) || (sachInfo ? sachInfo.ust_satz : '') || 'frei';
     buchungSpeichern({
       datum: z.datum, typ, betrag_brutto: z.umsatz_cent, ust_satz: ust,
-      konto: sach, gegenkonto: (sach === z.konto ? z.gegenkonto : z.konto) || '1800',
+      konto: sach, gegenkonto: (sach === z.konto ? z.gegenkonto : z.konto) || bankKonto(),
       aufteilung_modus: 'keine', buchungstext: z.buchungstext || z.belegfeld1,
       import_hash: z.import_hash, herkunft: 'datev',
     });
@@ -407,14 +416,12 @@ app.post('/api/sollstellung/erzeugen', (req) => {
   const monate = req.body.modus === 'monat' ? [Number(req.body.monat)] : Array.from({ length: 12 }, (_, i) => i + 1);
   const vertraege = all('SELECT * FROM mietvertraege WHERE aktiv = 1');
   const einheitName = (id) => one('SELECT bezeichnung FROM einheiten WHERE id = ?', id)?.bezeichnung || '';
-  const kontoMiete = { '19': '4860', '7': '4861', frei: '4862' };
-  const kontoNk = { '19': '4863', '7': '4863', frei: '4865' };
   let erzeugt = 0, uebersprungen = 0;
   const anlegen = (datum, einheit_id, konto, ust_satz, brutto, text) => {
     if (brutto <= 0) return;
     if (one('SELECT id FROM buchungen WHERE buchungstext = ? AND storniert = 0', text)) { uebersprungen++; return; }
     buchungSpeichern({
-      datum, typ: 'einnahme', betrag_brutto: brutto, ust_satz, konto, gegenkonto: '1800',
+      datum, typ: 'einnahme', betrag_brutto: brutto, ust_satz, konto, gegenkonto: bankKonto(),
       aufteilung_modus: 'direkt', einheit_id, buchungstext: text, herkunft: 'sollstellung',
     });
     erzeugt++;
@@ -424,9 +431,10 @@ app.post('/api/sollstellung/erzeugen', (req) => {
     const datum = `${jahr}-${mm}-01`;
     for (const v of vertraege) {
       const en = einheitName(v.einheit_id);
-      anlegen(datum, v.einheit_id, kontoMiete[v.ust_satz] || '4860', v.ust_satz,
+      const kontoErloes = standardKonto('einnahme', v.ust_satz);
+      anlegen(datum, v.einheit_id, kontoErloes, v.ust_satz,
         bruttoAusNetto(v.nettomiete, v.ust_satz), `Mietsollstellung ${mm}/${jahr} · ${en}`);
-      anlegen(datum, v.einheit_id, kontoNk[v.ust_satz] || '4863', v.ust_satz,
+      anlegen(datum, v.einheit_id, kontoErloes, v.ust_satz,
         bruttoAusNetto(v.nk_vorauszahlung || 0, v.ust_satz), `NK-Vorauszahlung ${mm}/${jahr} · ${en}`);
     }
   }
@@ -453,7 +461,7 @@ app.post('/api/ki/beleg', async (req) => {
       apiKey: m.ki_api_key,
       text: req.body.text || '',
       art: req.body.art || 'eingang',
-      konten: all('SELECT * FROM konten ORDER BY nummer'),
+      konten: all('SELECT * FROM konten WHERE rahmen = ? ORDER BY nummer', m.kontenrahmen),
       einheiten: all('SELECT * FROM einheiten'),
     });
     return vorschlag;
@@ -472,7 +480,7 @@ app.post('/api/ki/beleg-datei', async (req) => {
       apiKey: m.ki_api_key,
       dataUrl: req.body.datei_base64,
       art: req.body.art || 'eingang',
-      konten: all('SELECT * FROM konten ORDER BY nummer'),
+      konten: all('SELECT * FROM konten WHERE rahmen = ? ORDER BY nummer', m.kontenrahmen),
       einheiten: all('SELECT * FROM einheiten'),
     });
   } catch (e) {
