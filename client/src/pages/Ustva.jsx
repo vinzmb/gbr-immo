@@ -81,6 +81,7 @@ export default function Ustva() {
               <Zeile text="↳ Umsatzsteuer 7 %" wert={daten.ust_7} indent />
               <Zeile text="Steuerfreie Vermietungsumsätze (§4 Nr.12, nachrichtlich)" wert={daten.steuerfrei} grau />
               <Zeile kz="66" text="Abziehbare Vorsteuerbeträge" wert={daten.kz66} />
+              {!!daten.kz63 && <Zeile kz="63" text="Berichtigung des Vorsteuerabzugs (§15a UStG)" wert={daten.kz63} />}
               <div className="border-t border-slate-200 mt-2 pt-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

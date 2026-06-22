@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS ustva_meldungen (
   ust_19        INTEGER NOT NULL DEFAULT 0,
   ust_7         INTEGER NOT NULL DEFAULT 0,
   kz66          INTEGER NOT NULL DEFAULT 0, -- Vorsteuer
+  kz63          INTEGER NOT NULL DEFAULT 0, -- §15a-Berichtigung
   kz83          INTEGER NOT NULL DEFAULT 0, -- Zahllast/Überschuss
   steuerfrei    INTEGER NOT NULL DEFAULT 0, -- nachrichtlich
   status        TEXT    NOT NULL DEFAULT 'entwurf', -- 'entwurf' | 'festgeschrieben'

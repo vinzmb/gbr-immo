@@ -366,6 +366,23 @@ app.post('/api/bank/umsaetze/:id/verbuchen', (req) => {
 });
 
 // ---------- UStVA ----------
+// Ist die Periode der letzte Voranmeldungszeitraum des Jahres? (Q4 / Dezember / Jahr)
+function istLetzterZeitraum(p) {
+  return /Q4$/.test(p) || /^\d{4}-12$/.test(p) || /^\d{4}$/.test(p);
+}
+
+// Summe der anzuwendenden §15a-Berichtigungen eines Jahres (signiert).
+function vst15aJahresbetrag(jahr) {
+  let summe = 0;
+  for (const o of all('SELECT * FROM berichtigungsobjekte')) {
+    if (!jahreImZeitraum(o.beginn, o.jahre).includes(jahr)) continue;
+    const qn = o.objekt_id ? quoteFuerObjektImJahr(o.objekt_id, jahr) : o.quote_urspruenglich;
+    const b = berichtigungEinJahr(o, qn);
+    if (b.anzuwenden) summe += b.betrag;
+  }
+  return summe;
+}
+
 function ustvaFuerPeriode(periode) {
   const { von, bis } = periodeGrenzen(periode);
   const buchungen = all(
@@ -373,7 +390,11 @@ function ustvaFuerPeriode(periode) {
     von, bis
   );
   const k = ustvaBerechnen(buchungen);
-  return { periode, von, bis, anzahl: buchungen.length, ...k };
+  // §15a-Berichtigung (Kz 63) nur im letzten Voranmeldungszeitraum des Jahres berücksichtigen.
+  const kz63 = istLetzterZeitraum(periode) ? vst15aJahresbetrag(Number(periode.slice(0, 4))) : 0;
+  // Kz 63 ist Teil der abziehbaren Vorsteuer (positiv = Mehrabzug, negativ = Rückzahlung).
+  const kz83 = k.kz83 - kz63;
+  return { periode, von, bis, anzahl: buchungen.length, ...k, kz63, kz83 };
 }
 
 app.get('/api/ustva', (req) => ustvaFuerPeriode(req.query.periode));
@@ -381,12 +402,12 @@ app.get('/api/ustva', (req) => ustvaFuerPeriode(req.query.periode));
 app.post('/api/ustva/festschreiben', (req) => {
   const r = ustvaFuerPeriode(req.body.periode);
   run(
-    `INSERT INTO ustva_meldungen (periode, von, bis, kz81, kz86, ust_19, ust_7, kz66, kz83, steuerfrei, status)
-     VALUES (?,?,?,?,?,?,?,?,?,?, 'festgeschrieben')
+    `INSERT INTO ustva_meldungen (periode, von, bis, kz81, kz86, ust_19, ust_7, kz66, kz63, kz83, steuerfrei, status)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?, 'festgeschrieben')
      ON CONFLICT(periode) DO UPDATE SET kz81=excluded.kz81, kz86=excluded.kz86,
-       ust_19=excluded.ust_19, ust_7=excluded.ust_7, kz66=excluded.kz66, kz83=excluded.kz83,
+       ust_19=excluded.ust_19, ust_7=excluded.ust_7, kz66=excluded.kz66, kz63=excluded.kz63, kz83=excluded.kz83,
        steuerfrei=excluded.steuerfrei, status='festgeschrieben'`,
-    r.periode, r.von, r.bis, r.kz81, r.kz86, r.ust_19, r.ust_7, r.kz66, r.kz83, r.steuerfrei
+    r.periode, r.von, r.bis, r.kz81, r.kz86, r.ust_19, r.ust_7, r.kz66, r.kz63, r.kz83, r.steuerfrei
   );
   return r;
 });

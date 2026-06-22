@@ -31,6 +31,7 @@ export function elsterUStVAXml(k, m, periode, erstellungsdatum) {
   if (k.kz81) kz.push(`        <Kz81>${ganzEuro(k.kz81)}</Kz81>`);
   if (k.kz86) kz.push(`        <Kz86>${ganzEuro(k.kz86)}</Kz86>`);
   if (k.kz66) kz.push(`        <Kz66>${euro(k.kz66)}</Kz66>`);
+  if (k.kz63) kz.push(`        <Kz63>${euro(k.kz63)}</Kz63>`);
   kz.push(`        <Kz83>${euro(k.kz83)}</Kz83>`);
 
   return `<?xml version="1.0" encoding="UTF-8"?>

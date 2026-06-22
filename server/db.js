@@ -67,6 +67,7 @@ function migriere(db) {
   ergaenze('buchungen', 'herkunft', "TEXT NOT NULL DEFAULT ''");
   ergaenze('mandant', 'update_repo', "TEXT NOT NULL DEFAULT 'vinzmb/gbr-immo'");
   ergaenze('mandant', 'update_token', "TEXT NOT NULL DEFAULT ''");
+  ergaenze('ustva_meldungen', 'kz63', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function seed(db) {
