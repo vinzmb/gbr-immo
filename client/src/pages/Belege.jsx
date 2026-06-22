@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum, euroZuCent } from '../api.js';
-import { Card, Button, Table, Modal, Field, Input, Select, Textarea, Badge, Hinweis } from '../ui.jsx';
+import { Card, Button, Table, Modal, Field, Input, Select, Textarea, Badge, Hinweis, Erklaerung } from '../ui.jsx';
 
 const heute = () => new Date().toISOString().slice(0, 10);
 
@@ -31,6 +31,11 @@ export default function Belege() {
           + Beleg erfassen
         </Button>
       </header>
+
+      <Erklaerung>
+        <p>Ein <strong>Beleg</strong> ist eine Rechnung oder Quittung. Lade sie als Foto oder PDF hoch – die App bewahrt sie sicher auf (wichtig fürs Finanzamt) und kann sie automatisch <strong>auslesen</strong>, sodass du nichts abtippen musst.</p>
+        <p>Aus einem Beleg machst du anschließend mit „Verbuchen“ eine Einnahme oder Ausgabe.</p>
+      </Erklaerung>
 
       <Card>
         <Table

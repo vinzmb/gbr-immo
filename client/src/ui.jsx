@@ -35,13 +35,43 @@ export function Button({ children, variant = 'primary', className = '', ...rest 
   );
 }
 
-export function Field({ label, children, hint }) {
+export function Field({ label, children, hint, info }) {
   return (
     <label className="block">
-      {label && <span className="block text-sm font-medium text-slate-600 mb-1">{label}</span>}
+      {label && (
+        <span className="flex items-center text-sm font-medium text-slate-600 mb-1">
+          {label}
+          {info && <InfoTip text={info} />}
+        </span>
+      )}
       {children}
       {hint && <span className="block text-xs text-slate-400 mt-1">{hint}</span>}
     </label>
+  );
+}
+
+// Kleines Fragezeichen mit Erklärung beim Überfahren — für Fachbegriffe.
+export function InfoTip({ text }) {
+  return (
+    <span className="relative inline-flex group align-middle">
+      <span className="ml-1.5 w-4 h-4 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold flex items-center justify-center cursor-help select-none">?</span>
+      <span className="pointer-events-none invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity absolute z-30 left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-64 bg-slate-800 text-white text-xs leading-relaxed rounded-lg px-3 py-2 shadow-lg font-normal normal-case">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+// Einklappbarer Erklärkasten ("Was passiert hier?") in einfacher Sprache.
+export function Erklaerung({ titel = 'Was passiert hier?', children }) {
+  return (
+    <details className="bg-blue-50/70 border border-blue-200 rounded-xl px-4 py-3 text-sm group">
+      <summary className="font-medium text-blue-900 cursor-pointer flex items-center gap-2 list-none">
+        <span className="text-blue-500">ℹ️</span> {titel}
+        <span className="ml-auto text-blue-400 text-xs group-open:hidden">anzeigen</span>
+      </summary>
+      <div className="mt-2 space-y-1.5 text-blue-800 leading-relaxed">{children}</div>
+    </details>
   );
 }
 

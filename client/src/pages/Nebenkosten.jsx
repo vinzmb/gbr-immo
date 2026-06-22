@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum, euroZuCent } from '../api.js';
-import { Card, Button, Table, Field, Input, Select, Badge, Hinweis } from '../ui.jsx';
+import { Card, Button, Table, Field, Input, Select, Badge, Hinweis, Erklaerung, InfoTip } from '../ui.jsx';
 
 export default function Nebenkosten() {
   const [wizard, setWizard] = useState(false);
@@ -22,6 +22,10 @@ export default function Nebenkosten() {
         </div>
         <Button onClick={() => setWizard(true)}>+ Neue Abrechnung</Button>
       </header>
+      <Erklaerung>
+        <p>Einmal im Jahr rechnest du mit deinen Mietern die <strong>Betriebskosten</strong> ab (Grundsteuer, Versicherung, Müll, Heizung …). Jeder Mieter trägt seinen Anteil – meist nach Fläche.</p>
+        <p>Der Assistent führt dich durch: Welche Kosten zählen dazu? (die KI hilft) → wie viel wurde schon vorausgezahlt? → wer zahlt nach oder bekommt etwas zurück. Am Ende gibt es eine fertige Abrechnung zum Ausdrucken.</p>
+      </Erklaerung>
       <Card title="Gespeicherte Abrechnungen">
         <Table
           columns={[
@@ -185,7 +189,7 @@ function NkWizard({ onClose, objekte }) {
               { kopf: 'Betriebskostenart', zelle: (r) => r.umlagefaehig
                 ? <Input value={r.nk_art} onChange={(e) => setUmlage(r, true, e.target.value)} placeholder="z. B. Grundsteuer" />
                 : <span className="text-slate-300 text-sm">—</span> },
-              { kopf: 'Verteilung', zelle: (r) => r.umlagefaehig
+              { kopf: <span className="inline-flex items-center">Verteilung<InfoTip text="Wie diese Kosten auf die Mieter verteilt werden – meist nach Fläche, bei Heizung/Wasser nach Verbrauch." /></span>, zelle: (r) => r.umlagefaehig
                 ? <Select value={r.umlageschluessel} onChange={(e) => setUmlage(r, true, undefined, e.target.value)}>
                     <option value="flaeche">nach Fläche</option>
                     <option value="verbrauch_heiz">Verbrauch Heizung</option>
@@ -194,7 +198,7 @@ function NkWizard({ onClose, objekte }) {
                     <option value="anteil">Miteigentumsanteil</option>
                   </Select>
                 : <span className="text-slate-300 text-sm">—</span> },
-              { kopf: 'Umlagefähig', align: 'right', zelle: (r) => (
+              { kopf: <span className="inline-flex items-center">Umlagefähig<InfoTip text="Darfst du diese Kosten auf die Mieter umlegen? Ja z. B. bei Grundsteuer, Versicherung, Müll. Nein bei Reparaturen und Verwaltung." /></span>, align: 'right', zelle: (r) => (
                 <button onClick={() => setUmlage(r, !r.umlagefaehig)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium ${r.umlagefaehig ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   {r.umlagefaehig ? 'Ja' : 'Nein'}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum } from '../api.js';
-import { Card, Button, Hinweis, Badge, Field } from '../ui.jsx';
+import { Card, Button, Hinweis, Badge, Field, Erklaerung } from '../ui.jsx';
 
 export default function Ustva() {
   const [mandant, setMandant] = useState(null);
@@ -43,8 +43,13 @@ export default function Ustva() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-slate-800">USt-Voranmeldung</h1>
-        <p className="text-slate-500 mt-1">Kennzahlen berechnen, festschreiben und nach DATEV exportieren</p>
+        <p className="text-slate-500 mt-1">Die Umsatzsteuer ans Finanzamt melden</p>
       </header>
+
+      <Erklaerung>
+        <p>Das Finanzamt möchte regelmäßig (meist je Quartal) wissen, wie viel <strong>Umsatzsteuer</strong> du eingenommen hast und wie viel <strong>Vorsteuer</strong> in deinen Ausgaben steckte. Die Differenz – die <strong>Zahllast</strong> – überweist du ans Finanzamt (oder bekommst sie zurück).</p>
+        <p>Du musst hier nichts rechnen: Wähle nur den Zeitraum. Die App füllt alle amtlichen Felder („Kz …") automatisch aus deinen Buchungen.</p>
+      </Erklaerung>
 
       <Card title="Zeitraum wählen" subtitle={`Voranmeldungszeitraum laut Stammdaten: ${zr}`}>
         <div className="flex flex-wrap items-end gap-3">

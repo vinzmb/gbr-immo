@@ -144,11 +144,11 @@ function Einheiten() {
                 </Select>
               </Field>
             </div>
-            <Field label="USt-Status der Vermietung" hint="Bestimmt, ob Vorsteuer aus zugeordneten Kosten abziehbar ist.">
+            <Field label="Vermietest du mit oder ohne Umsatzsteuer?" info="Vermietest du an ein Gewerbe mit Umsatzsteuer (z. B. Laden), wähle 19 %. Vermietest du ohne (z. B. Wohnung, Arztpraxis), wähle „ohne“. Das entscheidet, ob du Vorsteuer aus Kosten dieser Einheit zurückbekommst.">
               <Select value={form.ust_status} onChange={(e) => setForm({ ...form, ust_status: e.target.value })}>
-                <option value="19">19 % – gewerblich mit Option (§9 UStG)</option>
-                <option value="7">7 % – ermäßigt</option>
-                <option value="frei">steuerfrei (§4 Nr.12 UStG)</option>
+                <option value="19">mit 19 % Umsatzsteuer (z. B. Gewerbe/Laden)</option>
+                <option value="7">mit 7 % Umsatzsteuer (ermäßigt)</option>
+                <option value="frei">ohne Umsatzsteuer (z. B. Wohnung, Arztpraxis)</option>
               </Select>
             </Field>
             <Field label="Miteigentumsanteil (optional)" hint="Nur nötig, wenn nach Anteil aufgeteilt werden soll.">

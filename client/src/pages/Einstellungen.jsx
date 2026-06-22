@@ -37,22 +37,22 @@ export default function Einstellungen() {
 
       <Card title="Besteuerung">
         <div className="grid md:grid-cols-3 gap-4">
-          <Field label="Besteuerungsart" hint="Ist = USt entsteht bei Zahlung; Soll = bei Rechnung.">
+          <Field label="Wann wird die Steuer fällig?" info="„Bei Zahlung“ (Ist) ist für Vermietung der Normalfall: Die Steuer entsteht erst, wenn das Geld eingeht. Im Zweifel so lassen.">
             <Select value={m.besteuerungsart} onChange={(e) => setM({ ...m, besteuerungsart: e.target.value })}>
-              <option value="ist">Ist-Versteuerung (§20)</option>
-              <option value="soll">Soll-Versteuerung</option>
+              <option value="ist">bei Zahlung (Ist-Versteuerung, Normalfall)</option>
+              <option value="soll">bei Rechnung (Soll-Versteuerung)</option>
             </Select>
           </Field>
-          <Field label="Voranmeldungszeitraum">
+          <Field label="Wie oft melden?" info="Wie oft du die Umsatzsteuer ans Finanzamt meldest. Das schreibt dir das Finanzamt vor – meist quartalsweise.">
             <Select value={m.voranmeldungszeitraum} onChange={(e) => setM({ ...m, voranmeldungszeitraum: e.target.value })}>
               <option value="monat">monatlich</option>
               <option value="quartal">quartalsweise</option>
               <option value="jahr">jährlich</option>
             </Select>
           </Field>
-          <Field label="Kontenrahmen">
+          <Field label="Kontenrahmen" info="Ein Nummernsystem für Buchhaltungskonten. Musst du nicht verstehen – die App nutzt es automatisch im Hintergrund. SKR 04 ist Standard.">
             <Select value={m.kontenrahmen} onChange={(e) => setM({ ...m, kontenrahmen: e.target.value })}>
-              <option value="skr04">SKR 04</option>
+              <option value="skr04">SKR 04 (Standard)</option>
               <option value="skr03">SKR 03</option>
             </Select>
           </Field>

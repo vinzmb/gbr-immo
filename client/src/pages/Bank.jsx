@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum } from '../api.js';
-import { Card, Button, Table, Modal, Field, Input, Select, Badge, Hinweis } from '../ui.jsx';
+import { Card, Button, Table, Modal, Field, Input, Select, Badge, Hinweis, Erklaerung } from '../ui.jsx';
 
 export default function Bank() {
   const [konten, setKonten] = useState([]);
@@ -34,6 +34,11 @@ export default function Bank() {
           <Button onClick={() => setImport(true)}>Umsätze importieren</Button>
         </div>
       </header>
+
+      <Erklaerung>
+        <p>Lade hier den Umsatz-Export aus deinem Online-Banking hoch (eine Datei, meist als CSV). Die App liest alle Überweisungen ein.</p>
+        <p>Im <strong>Posteingang</strong> arbeitest du sie dann der Reihe nach ab: Zu jedem Geldeingang/-ausgang erstellst du mit einem Klick die passende Buchung. So bleibt nichts liegen.</p>
+      </Erklaerung>
 
       <div className="grid md:grid-cols-3 gap-4">
         {konten.map((k) => (

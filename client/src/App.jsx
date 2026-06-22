@@ -9,6 +9,7 @@ import Ustva from './pages/Ustva.jsx';
 import Dokumente from './pages/Dokumente.jsx';
 import Nebenkosten from './pages/Nebenkosten.jsx';
 import Einstellungen from './pages/Einstellungen.jsx';
+import Hilfe from './pages/Hilfe.jsx';
 import Assistent from './pages/Assistent.jsx';
 import SetupWizard from './components/SetupWizard.jsx';
 
@@ -23,6 +24,7 @@ const NAV = [
   { id: 'nebenkosten', label: 'Nebenkosten', icon: 'M3 13h2l2 5 3-12 3 9 2-5h6' },
   { id: 'dokumente', label: 'Dokumente', icon: 'M6 2h9l5 5v15H6zM15 2v5h5' },
   { id: 'einstellungen', label: 'Einstellungen', icon: 'M12 9a3 3 0 100 6 3 3 0 000-6zM4 12h2m12 0h2M12 4v2m0 12v2' },
+  { id: 'hilfe', label: 'Hilfe & Lexikon', icon: 'M12 17h.01M12 13a2 2 0 10-2-2M12 21a9 9 0 110-18 9 9 0 010 18z' },
 ];
 
 export default function App() {
@@ -52,6 +54,7 @@ export default function App() {
     nebenkosten: <Nebenkosten />,
     dokumente: <Dokumente />,
     einstellungen: <Einstellungen />,
+    hilfe: <Hilfe />,
   };
 
   return (

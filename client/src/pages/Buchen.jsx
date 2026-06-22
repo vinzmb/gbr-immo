@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtEuro, fmtDatum, euroZuCent, fmtProzent } from '../api.js';
-import { Card, Button, Table, Field, Input, Select, Badge, Hinweis, Modal } from '../ui.jsx';
+import { Card, Button, Table, Field, Input, Select, Badge, Hinweis, Modal, Erklaerung, InfoTip } from '../ui.jsx';
 
 const heute = () => new Date().toISOString().slice(0, 10);
 const MODUS = {
@@ -96,6 +96,11 @@ export default function Buchen() {
         <Button variant="ghost" onClick={() => setSoll({ jahr: new Date().getFullYear(), modus: 'jahr', monat: new Date().getMonth() + 1, ergebnis: null })}>⟳ Sollstellungen erzeugen</Button>
       </header>
 
+      <Erklaerung>
+        <p>Hier hältst du fest, was rein- und rausgeht. <strong>Einnahme</strong> = du bekommst Geld (z. B. Miete), <strong>Ausgabe</strong> = du zahlst etwas (z. B. eine Handwerkerrechnung).</p>
+        <p>Du gibst nur das <strong>Datum</strong>, den <strong>Brutto-Betrag</strong> (so wie er auf der Rechnung steht) und kurz an, worum es geht. Den Rest – Steueranteil und Verteilung – rechnet die App automatisch und zeigt es rechts in der Vorschau.</p>
+      </Erklaerung>
+
       <div className="grid lg:grid-cols-2 gap-6">
         <Card title="Neue Buchung">
           <div className="space-y-4">
@@ -109,25 +114,17 @@ export default function Buchen() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Datum"><Input type="date" value={form.datum} onChange={(e) => setForm({ ...form, datum: e.target.value })} /></Field>
-              <Field label="Bruttobetrag (€)"><Input value={form.betrag_euro} onChange={(e) => setForm({ ...form, betrag_euro: e.target.value })} placeholder="1.190,00" /></Field>
+              <Field label="Bruttobetrag (€)" info="Der volle Betrag inklusive Mehrwertsteuer – genau so, wie er auf der Rechnung steht."><Input value={form.betrag_euro} onChange={(e) => setForm({ ...form, betrag_euro: e.target.value })} placeholder="1.190,00" /></Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="USt-Satz">
-                <Select value={form.ust_satz} onChange={(e) => setForm({ ...form, ust_satz: e.target.value })}>
-                  <option value="19">19 %</option><option value="7">7 %</option><option value="frei">steuerfrei</option>
-                </Select>
-              </Field>
-              <Field label="Konto (SKR04)">
-                <Select value={form.konto} onChange={(e) => setForm({ ...form, konto: e.target.value })}>
-                  <option value="">— wählen —</option>
-                  {kontenGefiltert.map((k) => <option key={k.id} value={k.nummer}>{k.nummer} · {k.bezeichnung}</option>)}
-                </Select>
-              </Field>
-            </div>
+            <Field label="Mehrwertsteuer-Satz" info="Wie viel Steuer im Betrag steckt. Im Zweifel 19 % – das ist der Normalfall. „steuerfrei“ z. B. bei Wohnungsvermietung.">
+              <Select value={form.ust_satz} onChange={(e) => setForm({ ...form, ust_satz: e.target.value })}>
+                <option value="19">19 % (Normalfall)</option><option value="7">7 % (ermäßigt)</option><option value="frei">steuerfrei / ohne</option>
+              </Select>
+            </Field>
 
             {form.typ === 'ausgabe' && (
               <>
-                <Field label="Aufteilung">
+                <Field label="Wie aufteilen?" info="Betrifft die Kosten nur eine Einheit → „Direkt“. Allgemeine Kosten fürs ganze Haus (Dach, Verwaltung) → „nach Fläche“. Eine Rechnung für mehrere Mieter → „Manuell“.">
                   <Select value={form.aufteilung_modus} onChange={(e) => setForm({ ...form, aufteilung_modus: e.target.value })}>
                     {Object.entries(MODUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </Select>
@@ -167,7 +164,16 @@ export default function Buchen() {
                 </Select>
               </Field>
             )}
-            <Field label="Buchungstext"><Input value={form.buchungstext} onChange={(e) => setForm({ ...form, buchungstext: e.target.value })} placeholder="z. B. Dachreparatur" /></Field>
+            <Field label="Wofür war das? (kurze Notiz)"><Input value={form.buchungstext} onChange={(e) => setForm({ ...form, buchungstext: e.target.value })} placeholder="z. B. Dachreparatur, Miete Laden …" /></Field>
+            <details className="text-sm">
+              <summary className="cursor-pointer text-slate-500 select-none">Buchhaltungs-Konto (optional – wird sonst automatisch gewählt)</summary>
+              <div className="mt-2">
+                <Select value={form.konto} onChange={(e) => setForm({ ...form, konto: e.target.value })}>
+                  <option value="">Automatisch wählen</option>
+                  {kontenGefiltert.map((k) => <option key={k.id} value={k.nummer}>{k.nummer} · {k.bezeichnung}</option>)}
+                </Select>
+              </div>
+            </details>
             {meldung && <Hinweis ton="ok">{meldung}</Hinweis>}
             <div className="flex justify-end"><Button onClick={speichern}>Buchung speichern</Button></div>
           </div>
@@ -179,9 +185,9 @@ export default function Buchen() {
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
-                <KZ label="Netto" wert={fmtEuro(vorschau.netto)} />
-                <KZ label={form.typ === 'einnahme' ? 'Umsatzsteuer' : 'Vorsteuer enthalten'} wert={fmtEuro(vorschau.ustGesamt)} />
-                <KZ label="Abziehbar" wert={fmtEuro(vorschau.vorsteuerAbziehbar)} ton="green" />
+                <KZ label="Netto" info="Der Betrag ohne Steuer." wert={fmtEuro(vorschau.netto)} />
+                <KZ label={form.typ === 'einnahme' ? 'Umsatzsteuer' : 'Vorsteuer enthalten'} info={form.typ === 'einnahme' ? 'Diese Steuer gehört dem Finanzamt.' : 'Die Mehrwertsteuer in dieser Ausgabe.'} wert={fmtEuro(vorschau.ustGesamt)} />
+                <KZ label="Abziehbar" info="So viel der Steuer holst du dir vom Finanzamt zurück." wert={fmtEuro(vorschau.vorsteuerAbziehbar)} ton="green" />
               </div>
               {form.typ === 'ausgabe' && vorschau.quote != null && (form.aufteilung_modus === 'flaeche') && (
                 <Hinweis ton="info">Abziehbare Vorsteuerquote nach Fläche: <strong>{fmtProzent(vorschau.quote)}</strong></Hinweis>
@@ -254,10 +260,10 @@ export default function Buchen() {
   );
 }
 
-function KZ({ label, wert, ton = 'slate' }) {
+function KZ({ label, wert, ton = 'slate', info }) {
   return (
     <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-xs text-slate-500 flex items-center">{label}{info && <InfoTip text={info} />}</div>
       <div className={`text-lg font-semibold tabular-nums ${ton === 'green' ? 'text-emerald-600' : 'text-slate-800'}`}>{wert}</div>
     </div>
   );

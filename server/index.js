@@ -28,6 +28,15 @@ function mandant() {
   return one('SELECT * FROM mandant WHERE id = 1');
 }
 
+// Automatische Kontoauswahl, falls der Nutzer kein Konto angibt (laienfreundlich).
+const STANDARD_KONTO = {
+  einnahme: { '19': '4860', '7': '4861', frei: '4862' },
+  ausgabe: { '19': '6300', '7': '6330', frei: '6340' },
+};
+function standardKonto(typ, ust) {
+  return (STANDARD_KONTO[typ] && STANDARD_KONTO[typ][ust]) || (typ === 'einnahme' ? '4860' : '6300');
+}
+
 function periodeFuerDatum(datum, zeitraum) {
   const jahr = datum.slice(0, 4);
   const monat = Number(datum.slice(5, 7));
@@ -209,10 +218,11 @@ function buchungSpeichern(body) {
   }
 
   const periode = periodeFuerDatum(body.datum, m.voranmeldungszeitraum);
+  const kontoFinal = body.konto || standardKonto(body.typ, body.ust_satz);
   const r = run(
     `INSERT INTO buchungen (datum, beleg_id, typ, konto, gegenkonto, betrag_brutto, ust_satz, ust_betrag, vorsteuer_abziehbar, steuerschluessel, buchungstext, aufteilung_modus, einheit_id, periode, import_hash, herkunft)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    body.datum, body.beleg_id || null, body.typ, body.konto || '', body.gegenkonto || '1800',
+    body.datum, body.beleg_id || null, body.typ, kontoFinal, body.gegenkonto || '1800',
     body.betrag_brutto, body.ust_satz, ust_betrag, vorsteuer_abziehbar,
     body.steuerschluessel || '', body.buchungstext || '', buchung.aufteilung_modus,
     buchung.einheit_id, periode, body.import_hash || '', body.herkunft || ''
