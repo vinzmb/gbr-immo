@@ -6,22 +6,26 @@ const heute = () => new Date().toISOString().slice(0, 10);
 const MODUS = {
   direkt: 'Direkt einer Einheit',
   flaeche: 'Flächenschlüssel (Gemeinkosten)',
+  manuell: 'Manuell auf mehrere Mieter/Einheiten',
   umsatz: 'Umsatzschlüssel',
   anteil: 'Miteigentumsanteil',
   keine: 'Keine Aufteilung (voll abziehbar)',
 };
+const USTKURZ = { '19': '19 %', '7': '7 %', frei: 'steuerfrei' };
 
 export default function Buchen() {
   const [objekte, setObjekte] = useState([]);
   const [einheiten, setEinheiten] = useState([]);
   const [konten, setKonten] = useState([]);
   const [buchungen, setBuchungen] = useState([]);
+  const [vertraege, setVertraege] = useState([]);
+  const [mieter, setMieter] = useState([]);
   const [vorschau, setVorschau] = useState(null);
   const [meldung, setMeldung] = useState('');
 
   const leer = {
     typ: 'ausgabe', datum: heute(), betrag_euro: '', ust_satz: '19', konto: '',
-    aufteilung_modus: 'flaeche', objekt_id: '', einheit_id: '', buchungstext: '',
+    aufteilung_modus: 'flaeche', objekt_id: '', einheit_id: '', buchungstext: '', manuell: {},
   };
   const [form, setForm] = useState(leer);
 
@@ -30,8 +34,19 @@ export default function Buchen() {
     api.get('/objekte').then(setObjekte);
     api.get('/einheiten').then(setEinheiten);
     api.get('/konten').then(setKonten);
+    api.get('/mietvertraege').then(setVertraege);
+    api.get('/mieter').then(setMieter);
     ladeBuchungen();
   }, []);
+
+  const mieterFuerEinheit = (einheitId) => {
+    const v = vertraege.find((x) => x.einheit_id === einheitId && x.aktiv);
+    return v ? mieter.find((m) => m.id === v.mieter_id)?.name : null;
+  };
+  const manuelleSplits = () =>
+    Object.entries(form.manuell || {})
+      .filter(([, g]) => Number(String(g).replace(',', '.')) > 0)
+      .map(([einheit_id, gewicht]) => ({ einheit_id, gewicht: Number(String(gewicht).replace(',', '.')) }));
 
   // Vorschau aktualisieren
   useEffect(() => {
@@ -41,9 +56,10 @@ export default function Buchen() {
       typ: form.typ, betrag_brutto: cent, ust_satz: form.ust_satz,
       aufteilung_modus: form.aufteilung_modus, objekt_id: form.objekt_id ? Number(form.objekt_id) : null,
       einheit_id: form.einheit_id ? Number(form.einheit_id) : null,
+      manuelle_splits: form.aufteilung_modus === 'manuell' ? manuelleSplits() : null,
     };
     api.post('/buchungen/vorschau', body).then(setVorschau).catch(() => setVorschau(null));
-  }, [form.betrag_euro, form.ust_satz, form.aufteilung_modus, form.objekt_id, form.einheit_id, form.typ]);
+  }, [form.betrag_euro, form.ust_satz, form.aufteilung_modus, form.objekt_id, form.einheit_id, form.typ, JSON.stringify(form.manuell)]);
 
   const einheitenGefiltert = form.objekt_id ? einheiten.filter((e) => e.objekt_id === Number(form.objekt_id)) : einheiten;
   const kontenGefiltert = konten.filter((k) => (form.typ === 'einnahme' ? k.art === 'erloes' : k.art === 'aufwand'));
@@ -58,6 +74,7 @@ export default function Buchen() {
       aufteilung_modus: form.aufteilung_modus,
       objekt_id: form.objekt_id ? Number(form.objekt_id) : null,
       einheit_id: form.einheit_id ? Number(form.einheit_id) : null,
+      manuelle_splits: form.aufteilung_modus === 'manuell' ? manuelleSplits() : null,
       buchungstext: form.buchungstext,
     });
     setForm({ ...leer, typ: form.typ });
@@ -118,6 +135,23 @@ export default function Buchen() {
                       {objekte.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
                     </Select>
                   </Field>
+                )}
+                {form.aufteilung_modus === 'manuell' && (
+                  <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+                    <div className="text-sm text-slate-600">Anteil je Einheit / Mieter (%) — leere Felder zählen als 0</div>
+                    {einheiten.map((e2) => (
+                      <div key={e2.id} className="flex items-center gap-3">
+                        <div className="flex-1 text-sm">
+                          <span className="font-medium text-slate-800">{e2.bezeichnung}</span>
+                          <span className="text-slate-400"> · {mieterFuerEinheit(e2.id) || 'kein Mieter'} · {USTKURZ[e2.ust_status]}</span>
+                        </div>
+                        <div className="w-24">
+                          <Input value={form.manuell?.[e2.id] || ''} onChange={(ev) => setForm({ ...form, manuell: { ...form.manuell, [e2.id]: ev.target.value } })} placeholder="%" />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-xs text-slate-400">Die Summe wird automatisch normiert (z. B. 70 / 30 oder 1 / 1 = 50 / 50).</div>
+                  </div>
                 )}
               </>
             )}

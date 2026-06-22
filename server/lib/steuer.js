@@ -68,6 +68,7 @@ export function splitsBerechnen(buchung, einheiten) {
     if (modus === 'flaeche') return Number(e.flaeche) || 0;
     if (modus === 'umsatz') return Number(e.umsatz_gewicht) || 0;
     if (modus === 'anteil') return Number(e.miteigentumsanteil) || 0;
+    if (modus === 'manuell') return Number(e.manuell_gewicht) || 0;
     return 0;
   };
 

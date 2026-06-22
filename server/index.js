@@ -10,7 +10,7 @@ import {
 } from './lib/steuer.js';
 import { datevBuchungsstapel } from './lib/datev.js';
 import { parseBank } from './lib/bankimport.js';
-import { belegKlassifizieren } from './lib/ki.js';
+import { belegKlassifizieren, belegAusDateiLesen } from './lib/ki.js';
 import { findeTreffer } from './lib/matching.js';
 
 const db = getDb();
@@ -123,6 +123,20 @@ function einheitenMitGewicht(objektId) {
   return rows;
 }
 
+// Einheiten-Liste passend zum Aufteilungsmodus (inkl. manueller Gewichte).
+function einheitenFuerBuchung(body) {
+  if (body.aufteilung_modus === 'manuell' && Array.isArray(body.manuelle_splits)) {
+    const alle = einheitenMitGewicht(null);
+    return body.manuelle_splits
+      .map((ms) => {
+        const e = alle.find((x) => x.id === Number(ms.einheit_id));
+        return e ? { ...e, manuell_gewicht: Number(ms.gewicht) || 0 } : null;
+      })
+      .filter(Boolean);
+  }
+  return einheitenMitGewicht(body.objekt_id || null);
+}
+
 // ---------- Belege ----------
 app.get('/api/belege', () => all('SELECT * FROM belege ORDER BY datum DESC, id DESC'));
 app.get('/api/belege/:id', (req) => one('SELECT * FROM belege WHERE id = ?', Number(req.params.id)));
@@ -171,8 +185,7 @@ app.get('/api/belege/:id/datei', (req, reply) => {
 // ---------- Buchungen ----------
 function buchungSpeichern(body) {
   const m = mandant();
-  const objektId = body.objekt_id || null;
-  const einheiten = einheitenMitGewicht(objektId);
+  const einheiten = einheitenFuerBuchung(body);
   const buchung = {
     betrag_brutto: body.betrag_brutto,
     ust_satz: body.ust_satz,
@@ -228,7 +241,7 @@ app.post('/api/buchungen/vorschau', (req) => {
     const ust = ustAusBrutto(body.betrag_brutto, body.ust_satz);
     return { ustGesamt: ust, vorsteuerAbziehbar: 0, netto: nettoAusBrutto(body.betrag_brutto, body.ust_satz), splits: [] };
   }
-  const einheiten = einheitenMitGewicht(body.objekt_id || null);
+  const einheiten = einheitenFuerBuchung(body);
   const res = splitsBerechnen(
     {
       betrag_brutto: body.betrag_brutto, ust_satz: body.ust_satz,
@@ -295,6 +308,7 @@ app.post('/api/bank/umsaetze/:id/verbuchen', (req) => {
     ust_satz: req.body.ust_satz || '19', konto: req.body.konto || '',
     gegenkonto: '1800', aufteilung_modus: req.body.aufteilung_modus,
     einheit_id: req.body.einheit_id || null, objekt_id: req.body.objekt_id || null,
+    manuelle_splits: req.body.manuelle_splits || null,
     beleg_id: req.body.beleg_id || null,
     buchungstext: u.verwendungszweck.slice(0, 60),
   });
@@ -355,6 +369,24 @@ app.post('/api/ki/beleg', async (req) => {
       einheiten: all('SELECT * FROM einheiten'),
     });
     return vorschlag;
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
+
+// OCR: Beleg aus Datei (PDF/Bild) auslesen
+app.post('/api/ki/beleg-datei', async (req) => {
+  const m = mandant();
+  if (!m.ki_aktiv || !m.ki_api_key) return { error: 'KI ist nicht aktiviert. Bitte API-Schlüssel in den Einstellungen hinterlegen.' };
+  if (!req.body.datei_base64) return { error: 'Keine Datei übergeben.' };
+  try {
+    return await belegAusDateiLesen({
+      apiKey: m.ki_api_key,
+      dataUrl: req.body.datei_base64,
+      art: req.body.art || 'eingang',
+      konten: all('SELECT * FROM konten ORDER BY nummer'),
+      einheiten: all('SELECT * FROM einheiten'),
+    });
   } catch (e) {
     return { error: String(e.message || e) };
   }

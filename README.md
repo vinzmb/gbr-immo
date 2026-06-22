@@ -28,7 +28,17 @@ Voraussetzung: [Node.js](https://nodejs.org) Version 22 oder neuer.
 - **Direkte Zuordnung** zu einer Einheit → Vorsteuer 100 % / 0 % je nach USt-Status.
 - **Flächenschlüssel** für Gemeinkosten → abziehbare Vorsteuer = steuerpflichtig
   vermietete Fläche ÷ Gesamtfläche.
+- **Manuell** → eine Rechnung (z. B. Handwerker) gezielt mit eigenen Anteilen auf
+  mehrere Einheiten/Mieter verteilen (Mietername wird angezeigt).
 - **Umsatz-** und **Anteilsschlüssel** zusätzlich verfügbar.
+
+## KI & OCR (optional, eigener Anthropic-API-Schlüssel)
+
+- **OCR / Beleg auslesen:** Beim Erfassen eines Belegs die hochgeladene Datei
+  (PDF/Bild) automatisch auslesen lassen — Partner, Datum, Betrag, USt, Konto und
+  Aufteilung werden vorgeschlagen.
+- **KI-Vorschlag aus Text** und **Matching-Vorschläge** im Buchungsstapel.
+- Aktivierung in den Einstellungen; Belegdaten werden nur auf Klick gesendet.
 
 ## Projektstruktur
 

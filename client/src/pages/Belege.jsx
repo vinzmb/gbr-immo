@@ -86,22 +86,36 @@ function BelegFormular({ form, setForm, onClose, onGespeichert }) {
     onGespeichert();
   };
 
+  const uebernehmeVorschlag = (v) => setForm((f) => ({
+    ...f,
+    partner: v.partner || f.partner,
+    datum: v.datum || f.datum,
+    beleg_nr: v.beleg_nr || f.beleg_nr,
+    betrag_euro: v.betrag_brutto ? (v.betrag_brutto / 100).toString().replace('.', ',') : f.betrag_euro,
+    beschreibung: v.beschreibung || f.beschreibung,
+    kategorie: v.kategorie || f.kategorie,
+    ocr_text: v.volltext || f.ocr_text,
+  }));
+
   const kiVorschlag = async () => {
     setKiLaedt(true); setKiFehler('');
     try {
       const text = form.ocr_text || `${form.partner} ${form.beschreibung} ${form.betrag_euro}`;
       const v = await api.post('/ki/beleg', { text, art: form.art });
-      if (v.error) { setKiFehler(v.error); }
-      else {
-        setForm((f) => ({
-          ...f,
-          partner: v.partner || f.partner,
-          datum: v.datum || f.datum,
-          betrag_euro: v.betrag_brutto ? (v.betrag_brutto / 100).toString().replace('.', ',') : f.betrag_euro,
-          beschreibung: v.beschreibung || f.beschreibung,
-          kategorie: v.kategorie || f.kategorie,
-        }));
-      }
+      if (v.error) setKiFehler(v.error);
+      else uebernehmeVorschlag(v);
+    } catch (e) { setKiFehler(e.message); }
+    setKiLaedt(false);
+  };
+
+  const ocrAuslesen = async () => {
+    if (!datei) return;
+    setKiLaedt(true); setKiFehler('');
+    try {
+      const dataUrl = await dateiLesen(datei);
+      const v = await api.post('/ki/beleg-datei', { datei_base64: dataUrl, art: form.art });
+      if (v.error) setKiFehler(v.error);
+      else uebernehmeVorschlag(v);
     } catch (e) { setKiFehler(e.message); }
     setKiLaedt(false);
   };
@@ -131,11 +145,14 @@ function BelegFormular({ form, setForm, onClose, onGespeichert }) {
           <Field label="Belegdatei (PDF/Bild)" hint="Wird unveränderbar im lokalen Archiv abgelegt.">
             <input type="file" accept=".pdf,image/*" onChange={(e) => setDatei(e.target.files[0])} className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200" />
           </Field>
-          <Field label="Belegtext (für KI / Notiz)" hint="Text aus dem Beleg einfügen — die KI macht daraus einen Buchungsvorschlag.">
+          {datei && (
+            <Button variant="subtle" onClick={ocrAuslesen} disabled={kiLaedt}>{kiLaedt ? 'Liest Beleg …' : '📄 Beleg automatisch auslesen (OCR)'}</Button>
+          )}
+          <Field label="Belegtext (für KI / Notiz)" hint="Wird beim OCR automatisch befüllt — oder Text manuell einfügen.">
             <Textarea value={form.ocr_text || ''} onChange={(e) => setForm({ ...form, ocr_text: e.target.value })} rows={5} />
           </Field>
           <div className="flex items-center gap-2">
-            <Button variant="subtle" onClick={kiVorschlag} disabled={kiLaedt}>{kiLaedt ? 'KI denkt …' : '✨ KI-Vorschlag'}</Button>
+            <Button variant="subtle" onClick={kiVorschlag} disabled={kiLaedt}>{kiLaedt ? 'KI denkt …' : '✨ KI-Vorschlag (aus Text)'}</Button>
             <span className="text-xs text-slate-400">Optional · benötigt API-Schlüssel</span>
           </div>
           {kiFehler && <Hinweis ton="warn">{kiFehler}</Hinweis>}
