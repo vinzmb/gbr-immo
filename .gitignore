@@ -1,0 +1,10 @@
+node_modules/
+daten/
+client/dist/
+*.log
+.DS_Store
+.env
+
+# Build-/Test-Artefakte
+client/.playwright-mcp/
+*.png

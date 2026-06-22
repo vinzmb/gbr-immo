@@ -1,0 +1,20 @@
+{
+  "name": "gbr-immo",
+  "version": "0.1.0",
+  "description": "Lokale Verwaltung einer Grundstücks-GbR mit Schwerpunkt Finanzbuchhaltung & USt-Voranmeldung",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client install && npm --prefix client run build",
+    "setup": "npm install && npm run build"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.3",
+    "fastify": "^5.2.0"
+  }
+}

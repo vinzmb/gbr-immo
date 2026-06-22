@@ -1,0 +1,93 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: GB
+      - generic [ref=e8]:
+        - generic [ref=e9]: GBR-Immo
+        - generic [ref=e10]: Immobilien & Finanzen
+    - navigation [ref=e11]:
+      - button "Übersicht" [ref=e12]:
+        - img [ref=e13]
+        - text: Übersicht
+      - button "Objekte & Mieter" [ref=e15]:
+        - img [ref=e16]
+        - text: Objekte & Mieter
+      - button "Belege" [ref=e18]:
+        - img [ref=e19]
+        - text: Belege
+      - button "Buchen" [ref=e21]:
+        - img [ref=e22]
+        - text: Buchen
+      - button "Bank" [ref=e24]:
+        - img [ref=e25]
+        - text: Bank
+      - button "USt-Voranmeldung" [ref=e27]:
+        - img [ref=e28]
+        - text: USt-Voranmeldung
+      - button "Dokumente" [ref=e30]:
+        - img [ref=e31]
+        - text: Dokumente
+      - button "Einstellungen" [ref=e33]:
+        - img [ref=e34]
+        - text: Einstellungen
+    - generic [ref=e36]: Lokal & privat · Daten bleiben auf diesem PC
+  - main [ref=e37]:
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - heading "Übersicht" [level=1] [ref=e41]
+        - paragraph [ref=e42]: Meine Grundstücks-GbR
+      - generic [ref=e43]:
+        - strong [ref=e44]: Willkommen!
+        - text: Lege zuerst dein Objekt mit den Mieteinheiten und Flächen an — danach kannst du Belege erfassen, Bankumsätze importieren und die USt-Voranmeldung erstellen.
+        - button "Jetzt einrichten →" [ref=e46]
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - generic [ref=e49]: Objekte
+          - generic [ref=e50]: "0"
+        - generic [ref=e51]:
+          - generic [ref=e52]: Mieteinheiten
+          - generic [ref=e53]: "0"
+        - generic [ref=e54]:
+          - generic [ref=e55]: Offene Belege
+          - generic [ref=e56]: "0"
+        - generic [ref=e57]:
+          - generic [ref=e58]: Offene Bankumsätze
+          - generic [ref=e59]: "0"
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - generic [ref=e63]:
+            - heading "USt-Voranmeldung 2026-Q2" [level=3] [ref=e64]
+            - paragraph [ref=e65]: aktueller Zeitraum (Vorschau)
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - generic [ref=e68]:
+                - generic [ref=e69]: Umsätze 19 % (netto)
+                - generic [ref=e70]: 0,00 €
+              - generic [ref=e71]:
+                - generic [ref=e72]: Umsätze 7 % (netto)
+                - generic [ref=e73]: 0,00 €
+              - generic [ref=e74]:
+                - generic [ref=e75]: USt (19 % + 7 %)
+                - generic [ref=e76]: 0,00 €
+              - generic [ref=e77]:
+                - generic [ref=e78]: Vorsteuer
+                - generic [ref=e79]: 0,00 €
+            - generic [ref=e80]:
+              - generic [ref=e81]:
+                - generic [ref=e82]: Voraussichtliche Zahllast
+                - generic [ref=e83]: 0,00 €
+              - button "Zur Voranmeldung →" [ref=e84]
+        - generic [ref=e85]:
+          - generic [ref=e87]:
+            - heading "Vorsteuerquote" [level=3] [ref=e88]
+            - paragraph [ref=e89]: nach Flächenschlüssel
+          - generic [ref=e90]:
+            - generic [ref=e91]: 0,0 %
+            - paragraph [ref=e92]: Anteil der steuerpflichtig vermieteten Fläche an der Gesamtfläche. So viel der Vorsteuer aus Gemeinkosten ist abziehbar.
+      - generic [ref=e93]:
+        - heading "Schnellzugriff" [level=3] [ref=e96]
+        - generic [ref=e98]:
+          - button "Beleg erfassen" [ref=e99]
+          - button "Buchung anlegen" [ref=e100]
+          - button "Bankumsätze importieren" [ref=e101]
+          - button "DATEV-Export" [ref=e102]
