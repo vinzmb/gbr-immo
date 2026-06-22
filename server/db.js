@@ -65,7 +65,7 @@ function migriere(db) {
   ergaenze('buchungen', 'umlageschluessel', "TEXT NOT NULL DEFAULT ''");
   ergaenze('buchungen', 'import_hash', "TEXT NOT NULL DEFAULT ''");
   ergaenze('buchungen', 'herkunft', "TEXT NOT NULL DEFAULT ''");
-  ergaenze('mandant', 'update_repo', "TEXT NOT NULL DEFAULT 'vinzentweiss/gbr-immo'");
+  ergaenze('mandant', 'update_repo', "TEXT NOT NULL DEFAULT 'vinzmb/gbr-immo'");
   ergaenze('mandant', 'update_token', "TEXT NOT NULL DEFAULT ''");
 }
 

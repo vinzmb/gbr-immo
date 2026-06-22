@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS mandant (
   kontenrahmen         TEXT    NOT NULL DEFAULT 'skr04',    -- 'skr04' | 'skr03'
   ki_aktiv             INTEGER NOT NULL DEFAULT 0,
   ki_api_key           TEXT    NOT NULL DEFAULT '',
-  update_repo          TEXT    NOT NULL DEFAULT 'vinzentweiss/gbr-immo',
+  update_repo          TEXT    NOT NULL DEFAULT 'vinzmb/gbr-immo',
   update_token         TEXT    NOT NULL DEFAULT '',
   erstellt_am          TEXT    NOT NULL DEFAULT (datetime('now'))
 );
